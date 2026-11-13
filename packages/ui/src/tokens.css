@@ -1,0 +1,122 @@
+@import "@fontsource-variable/cairo/wght.css";
+@import "@fontsource/poppins/latin-400.css";
+@import "@fontsource/poppins/latin-600.css";
+@import "@fontsource/poppins/latin-700.css";
+
+@theme inline {
+  --color-burgundy-900: #3a0a1a;
+  --color-burgundy-700: #5e0f2a;
+  --color-burgundy-600: #7a1535;
+  --color-burgundy-500: #962046;
+  --color-navy-950: #060e20;
+  --color-navy-900: #0a1733;
+  --color-navy-800: #10224a;
+  --color-champagne: #e8c9a0;
+  --color-cream: #faf6f3;
+  --color-ink: #1b1420;
+  --color-muted: #6b6470;
+  --color-border: #eadfe0;
+  --color-dashboard: #f5f1f0;
+  --color-white: #ffffff;
+  --color-burgundy-soft: color-mix(in srgb, #7a1535 8%, white);
+  --color-burgundy-faint: color-mix(in srgb, #7a1535 12%, white);
+  --color-overlay: rgb(6 14 32 / 45%);
+  --color-shadow-soft: rgb(27 20 32 / 5%);
+  --color-shadow-strong: rgb(6 14 32 / 15%);
+  --font-arabic: "Cairo Variable", sans-serif;
+  --font-latin: "Poppins", sans-serif;
+  --radius-card: 12px;
+  --radius-panel: 20px;
+  --radius-pill: 999px;
+}
+
+:root {
+  color-scheme: light;
+  font-family: var(--font-arabic);
+  color: var(--color-ink);
+  background: var(--color-cream);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+.icon-button {
+  display: grid;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  color: var(--color-ink);
+  background: var(--color-white);
+  cursor: pointer;
+}
+
+.icon-button svg {
+  width: 1.25rem;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-burgundy-500);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.brand-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 0.85rem;
+  color: var(--color-champagne);
+  background: linear-gradient(135deg, var(--color-navy-900), var(--color-burgundy-700));
+}
+
+.brand-mark--compact {
+  width: 2.25rem;
+  border-radius: 0.7rem;
+}
+
+.brand-mark__glyph {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}

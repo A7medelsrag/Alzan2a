@@ -1,0 +1,32 @@
+{
+  "name": "@store/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "pnpm --filter @store/shared build",
+    "dev": "vite --host 0.0.0.0 --port 5000",
+    "prebuild": "pnpm --filter @store/shared build",
+    "build": "tsc --noEmit && vite build",
+    "pretypecheck": "pnpm --filter @store/shared build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@store/shared": "workspace:*",
+    "@store/ui": "workspace:*",
+    "i18next": "^26.7.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-i18next": "17.1.11",
+    "react-router": "^8.5.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.5"
+  }
+}

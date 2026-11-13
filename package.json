@@ -1,0 +1,28 @@
+{
+  "name": "store-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @store/api --filter @store/web dev",
+    "dev:api": "pnpm --filter @store/api dev",
+    "dev:web": "pnpm --filter @store/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:rehearse": "node scripts/rehearse-migration.ts",
+    "db:migrate": "pnpm --filter @store/api db:migrate",
+    "db:seed": "pnpm --filter @store/api db:seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/node": "^22.13.4",
+    "eslint": "^9.20.1",
+    "prettier": "^3.5.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.0",
+    "vitest": "^3.0.5"
+  }
+}
