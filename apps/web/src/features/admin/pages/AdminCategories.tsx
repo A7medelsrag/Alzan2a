@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
+import AdminImageField from "../components/AdminImageField";
+import { getAdminSession } from "../api/auth";
+import { resolvePublicImageUrl } from "../../../utils/media";
 import {
   fetchAdminCategories,
   createAdminCategory,
@@ -15,6 +18,7 @@ export default function AdminCategories() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
 
   // Edit Form State
   const [editName, setEditName] = useState("");
@@ -51,6 +55,16 @@ export default function AdminCategories() {
 
   useEffect(() => {
     void loadData();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void getAdminSession().then((session) => {
+      if (active && session) setCsrfToken(session.csrfToken);
+    }).catch(() => {
+      if (active) setError("تعذر التحقق من جلسة الإدارة. حدّثي الصفحة وسجّلي الدخول مرة أخرى.");
+    });
+    return () => { active = false; };
   }, []);
 
   const handleSelect = (cat: AdminCategory) => {
@@ -237,19 +251,13 @@ export default function AdminCategories() {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs text-neutral-900 text-left font-mono focus:outline-hidden focus:border-[#7a1535]"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
-                  رابط صورة القسم (اختياري)
-                </label>
-                <input
-                  type="text"
-                  value={newImageUrl}
-                  onChange={(e) => setNewImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  dir="ltr"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs text-neutral-900 text-left font-mono focus:outline-hidden focus:border-[#7a1535]"
-                />
-              </div>
+              <AdminImageField
+                csrfToken={csrfToken}
+                label="رابط صورة القسم (اختياري)"
+                value={newImageUrl}
+                disabled={creating}
+                onChange={setNewImageUrl}
+              />
             </div>
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">
               <button
@@ -318,7 +326,7 @@ export default function AdminCategories() {
                     <div className="flex items-center gap-3">
                       {cat.imageUrl ? (
                         <img
-                          src={cat.imageUrl}
+                          src={resolvePublicImageUrl(cat.imageUrl)}
                           alt={cat.name}
                           className="w-10 h-10 rounded-full object-cover border border-neutral-200 shrink-0"
                         />
@@ -391,19 +399,13 @@ export default function AdminCategories() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-                  رابط صورة القسم
-                </label>
-                <input
-                  type="text"
-                  value={editImageUrl}
-                  onChange={(e) => setEditImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  dir="ltr"
-                  className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-900 text-left font-mono focus:outline-hidden focus:border-[#7a1535]"
-                />
-              </div>
+              <AdminImageField
+                csrfToken={csrfToken}
+                label="رابط صورة القسم"
+                value={editImageUrl}
+                disabled={saving}
+                onChange={setEditImageUrl}
+              />
 
               {/* Action Buttons */}
               <div className="space-y-2 pt-3 border-t border-neutral-100">

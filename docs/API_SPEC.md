@@ -69,7 +69,7 @@ Section bodies use `homepageSectionInputSchema`: `type`, `title`, optional `subt
 - `PUT /admin/homepage/banners/{id}` — replace a banner's editable fields.
 - `DELETE /admin/homepage/banners/{id}` — delete a banner.
 
-Banner bodies use `homepageBannerInputSchema`: `slot`, optional `title`, `subtitle`, `desktopImageUrl`, `mobileImageUrl`, `buttonLabel`, `linkUrl`, `startsAt`, and `endsAt`, plus `overlayColor`, `overlayOpacity` (0–80), `blur` (0–20), `isEnabled`, and `sortOrder`. A banner needs text or an image. A button label requires a destination.
+Banner bodies use `homepageBannerInputSchema`: `slot` (`ANNOUNCEMENT`, `HERO`, `SIDE_TOP`, `SIDE_BOTTOM`, `TIMER`, `FINAL`, or legacy `PROMOTION`), optional `title`, `subtitle`, `desktopImageUrl`, `mobileImageUrl`, `buttonLabel`, `linkUrl`, `startsAt`, and `endsAt`, plus `overlayColor`, `overlayOpacity` (0–80), `blur` (0–20), `isEnabled`, and `sortOrder`. The storefront places these slots in the announcement bar, main hero, stacked top/bottom hero side cards, timer section, and final page placement respectively. A banner needs text or an image. A button label requires a destination.
 
 ### Catalog media
 

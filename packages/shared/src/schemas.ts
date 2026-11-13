@@ -71,7 +71,15 @@ export const homepageSectionTypeSchema = z.enum([
   "SOCIAL",
 ]);
 
-export const homepageBannerSlotSchema = z.enum(["ANNOUNCEMENT", "HERO", "PROMOTION"]);
+export const homepageBannerSlotSchema = z.enum([
+  "ANNOUNCEMENT",
+  "HERO",
+  "SIDE_TOP",
+  "SIDE_BOTTOM",
+  "TIMER",
+  "FINAL",
+  "PROMOTION",
+]);
 
 const httpsImageUrlSchema = z.string().url().refine((value) => {
   try {

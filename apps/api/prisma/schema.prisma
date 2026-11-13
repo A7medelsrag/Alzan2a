@@ -59,6 +59,10 @@ enum HomepageSectionType {
 enum HomepageBannerSlot {
   ANNOUNCEMENT
   HERO
+  SIDE_TOP
+  SIDE_BOTTOM
+  TIMER
+  FINAL
   PROMOTION
 }
 

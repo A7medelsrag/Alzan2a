@@ -17,6 +17,7 @@ import { useCart } from "./features/cart/CartContext";
 import { useWishlist } from "./features/wishlist/WishlistContext";
 import BundleDetailModal from "./features/catalog/components/BundleDetailModal";
 import ProductReviewsModal from "./features/catalog/components/ProductReviewsModal";
+import { resolvePublicImageUrl } from "./utils/media";
 
 type CatalogProduct = ProductListResponse["data"][number];
 type CatalogCategory = CategoryListResponse["data"][number];
@@ -198,10 +199,14 @@ export default function Storefront() {
 
   const heroBanners = homepage?.banners.filter((banner) => banner.slot === "HERO") ?? [];
   const promotionalBanners = homepage?.banners.filter((banner) => banner.slot === "PROMOTION") ?? [];
+  const announcementBanners = homepage?.banners.filter((banner) => banner.slot === "ANNOUNCEMENT") ?? [];
+  const topSideBanners = homepage?.banners.filter((banner) => banner.slot === "SIDE_TOP") ?? [];
+  const bottomSideBanners = homepage?.banners.filter((banner) => banner.slot === "SIDE_BOTTOM") ?? [];
+  const timerBanners = homepage?.banners.filter((banner) => banner.slot === "TIMER") ?? [];
+  const finalBanners = homepage?.banners.filter((banner) => banner.slot === "FINAL") ?? [];
   const visibleSections = homepage?.sections.filter((section) => sectionHasContent(section)) ?? [];
   const heading = submittedSearch ? t("searchResultsFor", { query: submittedSearch }) : t("collection");
   const heroPromotions = promotionalBanners.slice(0, 2);
-  const remainingPromotions = promotionalBanners.slice(2);
   const heroImageUrl = homepage?.sections.find((section) => section.type === "BRAND_STORY")?.imageUrl
     ?? products.find((product) => product.imageUrl)?.imageUrl
     ?? null;
@@ -248,7 +253,7 @@ export default function Storefront() {
 
   return (
     <div className="store-app" dir="rtl">
-      <AnnouncementBar />
+      <AnnouncementBar banners={announcementBanners} />
       <header className="store-header">
         <div className="store-header__main">
           <button
@@ -359,10 +364,10 @@ export default function Storefront() {
             {heroBanners.length > 0
               ? <CampaignSlider banners={heroBanners} />
               : <DefaultHero imageUrl={heroImageUrl} />}
-            {!submittedSearch && (
-              <PromotionBanners
-                banners={heroPromotions}
-                className={`promotion-grid--hero${heroPromotions.length === 1 ? " promotion-grid--hero-single" : ""}`}
+            {!submittedSearch && (topSideBanners.length > 0 || bottomSideBanners.length > 0 || heroPromotions.length > 0) && (
+              <HeroSidePromotions
+                topBanners={topSideBanners.length > 0 ? topSideBanners : heroPromotions.slice(0, 1)}
+                bottomBanners={bottomSideBanners.length > 0 ? bottomSideBanners : heroPromotions.slice(1, 2)}
               />
             )}
           </div>
@@ -373,9 +378,11 @@ export default function Storefront() {
             <>
               <StoreBenefits />
               <HomepageSections
-                banners={remainingPromotions}
+                banners={promotionalBanners}
                 bundles={bundles}
                 bundlesStatus={bundlesStatus}
+                timerBanners={timerBanners}
+                finalBanners={finalBanners}
                 offers={offers}
                 offersStatus={offersStatus}
                 onCategorySelect={selectCategory}
@@ -955,8 +962,18 @@ function OffersPageContent({
   );
 }
 
-function AnnouncementBar() {
-  return <div className="announcement">شحن مجاني على الطلبات فوق 1000 ج.م أو استخدمي كود ZANZA لخصم 10%</div>;
+function AnnouncementBar({ banners }: { banners: HomepageContent["banners"] }) {
+  const banner = banners[0];
+  if (!banner) return null;
+  const content = banner.title ?? banner.subtitle;
+  if (!content) return null;
+  return (
+    <div className="announcement">
+      {banner.linkUrl
+        ? <a href={banner.linkUrl}>{content}</a>
+        : <span>{content}</span>}
+    </div>
+  );
 }
 
 function CampaignSlider({ banners }: { banners: HomepageContent["banners"] }) {
@@ -975,17 +992,18 @@ function CampaignSlider({ banners }: { banners: HomepageContent["banners"] }) {
       <div className="campaign-slide__copy">
         {banner.subtitle && <p className="eyebrow">{banner.subtitle}</p>}
         {banner.title && <h1>{banner.title}</h1>}
-        <div className="campaign-slide__actions">
-          <a className="campaign-slide__button" href={banner.linkUrl ?? "#product-catalog"}>
-            {banner.buttonLabel ?? "تسوقي الآن"}
-          </a>
-          <a className="campaign-slide__button campaign-slide__button--secondary" href="#flash-sale">عروض اليوم</a>
-        </div>
+        {(banner.buttonLabel || banner.linkUrl) && (
+          <div className="campaign-slide__actions">
+            <a className="campaign-slide__button" href={banner.linkUrl ?? "#product-catalog"}>
+              {banner.buttonLabel ?? "تسوقي الآن"}
+            </a>
+          </div>
+        )}
       </div>
       {banner.desktopImageUrl && (
         <picture className="campaign-slide__media">
           {banner.mobileImageUrl && <source media="(max-width: 48rem)" srcSet={banner.mobileImageUrl} />}
-          <img alt={banner.title ?? t("homepageBannerImageAlt")} fetchPriority="high" src={banner.desktopImageUrl} />
+          <img alt={banner.title ?? t("homepageBannerImageAlt")} fetchPriority="high" src={resolvePublicImageUrl(banner.desktopImageUrl)} />
         </picture>
       )}
       {!banner.desktopImageUrl && <span aria-hidden="true" className="campaign-slide__art" />}
@@ -1035,6 +1053,19 @@ function CampaignSlider({ banners }: { banners: HomepageContent["banners"] }) {
   );
 }
 
+function HeroSidePromotions({ topBanners, bottomBanners }: {
+  topBanners: HomepageContent["banners"];
+  bottomBanners: HomepageContent["banners"];
+}) {
+  if (topBanners.length === 0 && bottomBanners.length === 0) return null;
+  return (
+    <div className="hero-side-promotions">
+      {topBanners.length > 0 && <PromotionBanners banners={topBanners} className="hero-side-promotions__top" />}
+      {bottomBanners.length > 0 && <PromotionBanners banners={bottomBanners} className="hero-side-promotions__bottom" />}
+    </div>
+  );
+}
+
 function DefaultHero({ imageUrl }: { imageUrl: string | null }) {
   return (
     <section aria-labelledby="default-hero-title" className="default-hero">
@@ -1058,6 +1089,8 @@ function DefaultHero({ imageUrl }: { imageUrl: string | null }) {
 function HomepageSections({
   sections,
   banners,
+  timerBanners,
+  finalBanners,
   bundles,
   bundlesStatus,
   offers,
@@ -1069,6 +1102,8 @@ function HomepageSections({
 }: {
   sections: HomepageSection[];
   banners: HomepageContent["banners"];
+  timerBanners: HomepageContent["banners"];
+  finalBanners: HomepageContent["banners"];
   bundles: BundlePublic[];
   bundlesStatus: OffersStatus;
   offers: ProductOfferPublic[];
@@ -1093,6 +1128,7 @@ function HomepageSections({
         const categoryExtras = section.type === "CATEGORIES" ? (
           <>
             <FlashSale
+              banners={timerBanners}
               offers={offers}
               offersStatus={offersStatus}
               onOpenReviews={onOpenReviews}
@@ -1119,21 +1155,24 @@ function HomepageSections({
       })}
       {!sections.some((section) => section.type === "CATEGORIES") && (
         <>
-          <FlashSale offers={offers} offersStatus={offersStatus} onOpenReviews={onOpenReviews} products={products} />
+          <FlashSale banners={timerBanners} offers={offers} offersStatus={offersStatus} onOpenReviews={onOpenReviews} products={products} />
           <BundleOffers bundles={bundles} bundlesStatus={bundlesStatus} onOpenBundle={onOpenBundle} />
         </>
       )}
       {!campaignRendered && banners.length > 0 && <PromotionBanners banners={banners} />}
+      {finalBanners.length > 0 && <PromotionBanners banners={finalBanners} className="homepage-final-banners" />}
     </div>
   );
 }
 
 function FlashSale({
+  banners,
   products,
   offers,
   offersStatus,
   onOpenReviews,
 }: {
+  banners: HomepageContent["banners"];
   products: CatalogProduct[];
   offers: ProductOfferPublic[];
   offersStatus: OffersStatus;
@@ -1154,10 +1193,9 @@ function FlashSale({
   return (
     <section aria-labelledby="flash-sale-title" className="flash-sale" id="flash-sale">
       <header className="flash-sale__header">
-        <div>
-          <h2 id="flash-sale-title">عروض سريعة</h2>
-          <p>خصومات لفترة محدودة</p>
-        </div>
+        {banners[0]
+          ? <PromotionBanners banners={banners.slice(0, 1)} className="flash-sale__banner" />
+          : <div><h2 id="flash-sale-title">عروض سريعة</h2><p>خصومات لفترة محدودة</p></div>}
         <div aria-label="الوقت المتبقي" className="flash-sale__timer" dir="ltr">
           {remaining.map((value, index) => (
             <div className="flash-sale__timer-unit" key={index}>
@@ -1291,7 +1329,9 @@ function SectionContent({
               onClick={() => onCategorySelect(category.slug)}
               type="button"
             >
-              <span aria-hidden="true" className={`category-card__image category-card__image--${index % 6}`} />
+              <span aria-hidden="true" className={`category-card__image category-card__image--${index % 6}`}>
+                {category.imageUrl && <ImageWithFallback alt="" imageUrl={category.imageUrl} />}
+              </span>
               <span className="category-card__name">{category.name}</span>
             </button>
           ))}
@@ -1417,7 +1457,12 @@ function PromotionBanners({
         } as CSSProperties;
         const content = (
           <>
-            {banner.desktopImageUrl && <ImageWithFallback alt="" className="promotion-card__image" imageUrl={banner.mobileImageUrl ?? banner.desktopImageUrl} />}
+            {banner.desktopImageUrl && (
+              <picture className="promotion-card__media">
+                {banner.mobileImageUrl && <source media="(max-width: 48rem)" srcSet={banner.mobileImageUrl} />}
+                <img alt="" className="promotion-card__image" src={resolvePublicImageUrl(banner.desktopImageUrl)} />
+              </picture>
+            )}
             <span aria-hidden="true" className="promotion-card__overlay" />
             <span className="promotion-card__copy">
               {banner.subtitle && <small>{banner.subtitle}</small>}
@@ -1644,7 +1689,7 @@ function ImageWithFallback({
       </span>
     );
   }
-  return <img alt={alt} className={className} loading="lazy" onError={() => setFailed(true)} src={imageUrl} />;
+  return <img alt={alt} className={className} loading="lazy" onError={() => setFailed(true)} src={resolvePublicImageUrl(imageUrl)} />;
 }
 
 function Footer({ homepage }: { homepage: HomepageContent | null }) {

@@ -1955,6 +1955,7 @@
   text-decoration: none;
 }
 
+.promotion-card__media,
 .promotion-card__image,
 .promotion-card__overlay {
   position: absolute;
@@ -1965,6 +1966,7 @@
 }
 
 .promotion-card__image {
+  display: block;
   object-fit: cover;
   transition: transform 500ms ease;
 }

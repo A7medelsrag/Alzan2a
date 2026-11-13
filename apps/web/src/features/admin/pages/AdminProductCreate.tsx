@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import AdminLayout from "../components/AdminLayout";
+import AdminImageField from "../components/AdminImageField";
+import { getAdminSession } from "../api/auth";
 import {
   fetchAdminCategories,
   fetchAdminProducts,
@@ -19,6 +21,7 @@ export default function AdminProductCreate() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
 
   // Form Fields
   const [productNameAr, setProductNameAr] = useState("");
@@ -84,6 +87,16 @@ export default function AdminProductCreate() {
       active = false;
     };
   }, [editId]);
+
+  useEffect(() => {
+    let active = true;
+    void getAdminSession().then((session) => {
+      if (active && session) setCsrfToken(session.csrfToken);
+    }).catch(() => {
+      if (active) setError("تعذر التحقق من جلسة الإدارة. حدّثي الصفحة وسجّلي الدخول مرة أخرى.");
+    });
+    return () => { active = false; };
+  }, []);
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tagInput.trim()) {
@@ -273,40 +286,18 @@ export default function AdminProductCreate() {
               </div>
             </div>
 
-            {/* 2. Media Upload / Image URL */}
+            {/* 2. Product image */}
             <div className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-xs space-y-4">
               <h2 className="text-sm font-bold text-neutral-900 border-b border-neutral-100 pb-3">
                 صورة المنتج
               </h2>
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-                  رابط صورة المنتج الرئيسية
-                </label>
-                <input
-                  type="text"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  dir="ltr"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs text-neutral-900 focus:outline-hidden focus:border-[#7a1535] text-left font-mono"
-                />
-              </div>
-              {imageUrl && (
-                <div className="flex items-center gap-4 p-3 bg-neutral-50 rounded-xl">
-                  <img
-                    src={imageUrl}
-                    alt="معاينة"
-                    className="w-20 h-20 object-cover rounded-lg border border-neutral-200"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-neutral-800 block">معاينة الصورة</span>
-                    <span className="text-[11px] text-neutral-400">ستظهر هذه الصورة في واجهة المتجر</span>
-                  </div>
-                </div>
-              )}
+              <AdminImageField
+                csrfToken={csrfToken}
+                label="رابط صورة المنتج الرئيسية"
+                value={imageUrl}
+                disabled={submitting}
+                onChange={setImageUrl}
+              />
             </div>
 
             {/* 3. Pricing */}

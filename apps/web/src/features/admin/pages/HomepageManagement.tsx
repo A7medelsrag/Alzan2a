@@ -36,6 +36,16 @@ const sectionTypes: HomepageSectionInput["type"][] = [
   "SOCIAL",
 ];
 
+const bannerSlots: HomepageBannerInput["slot"][] = [
+  "HERO",
+  "SIDE_TOP",
+  "SIDE_BOTTOM",
+  "TIMER",
+  "FINAL",
+  "ANNOUNCEMENT",
+  "PROMOTION",
+];
+
 const emptySection = (sortOrder: number): SectionDraft => ({
   type: "NEW_ARRIVALS",
   title: "",
@@ -379,7 +389,7 @@ export default function HomepageManagement() {
               <label>{t("homepageSubtitle")}
                 <input maxLength={240} value={sectionDraft.subtitle ?? ""} onChange={(event) => setSectionDraft({ ...sectionDraft, subtitle: event.target.value || null })} />
               </label>
-              <AdminImageField csrfToken={csrfToken} label={t("homepageImageUrl")} value={sectionDraft.imageUrl ?? ""} onChange={(value) => setSectionDraft({ ...sectionDraft, imageUrl: value || null })} />
+              <AdminImageField csrfToken={csrfToken} onCsrfTokenChange={setCsrfToken} label={t("homepageImageUrl")} value={sectionDraft.imageUrl ?? ""} onChange={(value) => setSectionDraft({ ...sectionDraft, imageUrl: value || null })} />
               <label>{t("homepageButtonLabel")}
                 <input maxLength={80} value={sectionDraft.buttonLabel ?? ""} onChange={(event) => setSectionDraft({ ...sectionDraft, buttonLabel: event.target.value || null })} />
               </label>
@@ -483,7 +493,7 @@ export default function HomepageManagement() {
             <div className="homepage-admin__form-grid">
               <label>{t("homepageBannerSlot")}
                 <select value={bannerDraft.slot} onChange={(event) => setBannerDraft({ ...bannerDraft, slot: event.target.value as HomepageBannerInput["slot"] })}>
-                  {(["ANNOUNCEMENT", "HERO", "PROMOTION"] as const).map((slot) => <option key={slot} value={slot}>{t(`homepageBanner_${slot}`)}</option>)}
+                  {bannerSlots.map((slot) => <option key={slot} value={slot}>{t(`homepageBanner_${slot}`)}</option>)}
                 </select>
               </label>
               <label>{t("homepageTitle")}
@@ -492,8 +502,8 @@ export default function HomepageManagement() {
               <label>{t("homepageSubtitle")}
                 <input maxLength={240} value={bannerDraft.subtitle ?? ""} onChange={(event) => setBannerDraft({ ...bannerDraft, subtitle: event.target.value || null })} />
               </label>
-              <AdminImageField csrfToken={csrfToken} label={t("homepageDesktopImageUrl")} value={bannerDraft.desktopImageUrl ?? ""} onChange={(value) => setBannerDraft({ ...bannerDraft, desktopImageUrl: value || null })} />
-              <AdminImageField csrfToken={csrfToken} label={t("homepageMobileImageUrl")} value={bannerDraft.mobileImageUrl ?? ""} onChange={(value) => setBannerDraft({ ...bannerDraft, mobileImageUrl: value || null })} />
+              <AdminImageField csrfToken={csrfToken} onCsrfTokenChange={setCsrfToken} label={t("homepageDesktopImageUrl")} value={bannerDraft.desktopImageUrl ?? ""} onChange={(value) => setBannerDraft({ ...bannerDraft, desktopImageUrl: value || null })} />
+              <AdminImageField csrfToken={csrfToken} onCsrfTokenChange={setCsrfToken} label={t("homepageMobileImageUrl")} value={bannerDraft.mobileImageUrl ?? ""} onChange={(value) => setBannerDraft({ ...bannerDraft, mobileImageUrl: value || null })} />
               <label>{t("homepageButtonLabel")}
                 <input maxLength={80} value={bannerDraft.buttonLabel ?? ""} onChange={(event) => setBannerDraft({ ...bannerDraft, buttonLabel: event.target.value || null })} />
               </label>
@@ -544,8 +554,8 @@ export default function HomepageManagement() {
               }}
             >
               <h3>{category.name}</h3>
-              <AdminImageField csrfToken={csrfToken} label={t("homepageCategoryImageUrl")} value={categoryImageDrafts[category.id]?.imageUrl ?? ""} onChange={(value) => setCategoryImageDrafts({ ...categoryImageDrafts, [category.id]: { ...categoryImageDrafts[category.id]!, imageUrl: value } })} />
-              <AdminImageField csrfToken={csrfToken} label={t("homepageCategoryBannerUrl")} value={categoryImageDrafts[category.id]?.bannerImageUrl ?? ""} onChange={(value) => setCategoryImageDrafts({ ...categoryImageDrafts, [category.id]: { ...categoryImageDrafts[category.id]!, bannerImageUrl: value } })} />
+              <AdminImageField csrfToken={csrfToken} onCsrfTokenChange={setCsrfToken} label={t("homepageCategoryImageUrl")} value={categoryImageDrafts[category.id]?.imageUrl ?? ""} onChange={(value) => setCategoryImageDrafts({ ...categoryImageDrafts, [category.id]: { ...categoryImageDrafts[category.id]!, imageUrl: value } })} />
+              <AdminImageField csrfToken={csrfToken} onCsrfTokenChange={setCsrfToken} label={t("homepageCategoryBannerUrl")} value={categoryImageDrafts[category.id]?.bannerImageUrl ?? ""} onChange={(value) => setCategoryImageDrafts({ ...categoryImageDrafts, [category.id]: { ...categoryImageDrafts[category.id]!, bannerImageUrl: value } })} />
               <button className="customer-secondary-button" disabled={busy} type="submit">{t("homepageSave")}</button>
             </form>
           ))}
@@ -559,7 +569,7 @@ export default function HomepageManagement() {
               }}
             >
               <h3>{product.name}</h3>
-              <AdminImageField csrfToken={csrfToken} label={t("homepageProductImageUrl")} value={productImageDrafts[product.id] ?? ""} onChange={(value) => setProductImageDrafts({ ...productImageDrafts, [product.id]: value })} />
+              <AdminImageField csrfToken={csrfToken} onCsrfTokenChange={setCsrfToken} label={t("homepageProductImageUrl")} value={productImageDrafts[product.id] ?? ""} onChange={(value) => setProductImageDrafts({ ...productImageDrafts, [product.id]: value })} />
               <button className="customer-secondary-button" disabled={busy} type="submit">{t("homepageSave")}</button>
             </form>
           ))}

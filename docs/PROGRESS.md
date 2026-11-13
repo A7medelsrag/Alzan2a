@@ -1,5 +1,49 @@
 ﻿# Progress
 
+## 2026-11-13 — Fix local image URLs for category uploads
+
+- Diagnosed broken uploaded images in the local HTTP development app: saved media URLs use `https://localhost:4000`, but no TLS server is configured there. Added a frontend resolver that serves local API media through the same-origin `/api/v1/media` proxy during HTTP development.
+- Applied the resolver to homepage category imagery, admin category thumbnails, upload previews, and banner images.
+- Verified the live homepage API returns 2 categories with images and the first image loads through the web proxy with HTTP 200. Web typecheck, ESLint, and production build passed; the build retains the existing large-chunk warning.
+
+## 2026-11-13 — Display uploaded category images on homepage
+
+- Confirmed category image uploads are saved by the admin category/content APIs and included in homepage category responses, then fixed the storefront category card that previously ignored the returned `imageUrl` and always showed a decorative background.
+- Category cards now display the saved image, retaining the gradient placeholder when a category has no image or the image fails to load.
+- Verification: web typecheck, ESLint on `Storefront.tsx`, and web production build passed. Existing large-chunk warning remains. Browser rendering was not manually checked.
+
+## 2026-11-13 — Restore API database connectivity
+
+- Diagnosed admin login HTTP 500: Prisma Client had been generated with `--no-engine`, so direct database queries failed with Prisma `P6001`.
+- Regenerated Prisma Client with its normal query engine and restarted the API. Configured the local API Redis URL in `apps/api/.env`.
+- Verification: API `/health/ready` returns `ready`; an admin login probe with deliberately invalid credentials returns 401, confirming the API reaches the expected credential check without signing in. The API remains running on port 4000. No valid login was attempted.
+
+## 2026-11-13 — Split homepage campaigns into five placements
+
+- Added the five requested named ad slots to admin design controls: main hero, upper side, lower side, timer, and final banner. Kept announcement and legacy promotion slots available for compatibility.
+- Connected each new slot to its storefront placement; side ads stack beside the main hero, timer ad appears in the countdown section, and final ad appears after homepage sections.
+- Added a database migration that expands the enum and reclassifies the first three existing promotions by display order into upper side, lower side, and timer, preserving any remaining promotions.
+- Verification: shared/API/web typechecks, web production build, ESLint on changed storefront/admin/i18n files, and `git diff --check` passed. Build reports the existing large chunk warning. Migration was not applied and banner rendering was not manually checked in a browser.
+
+## 2026-11-13 — Upload category images from category forms
+
+- Added local image selection, upload progress/errors, URL entry, and preview to both the create-category modal and edit-category panel using the existing shared admin image field. The uploaded URL is saved through the existing category create/update API.
+- Retrieved the active admin session CSRF token for uploads; server-side image validation and re-encoding remain in effect.
+- Verification: storefront typecheck, production build, and ESLint on changed files passed. Build shows the existing non-blocking large chunk warning. No manual browser upload smoke test was run.
+
+## 2026-11-13 — Connect all homepage ad placements to admin content
+
+- Confirmed the homepage admin supports create/edit/delete, desktop and mobile image upload, copy, destination, display order, enable/disable, and start/end scheduling for announcement, hero, and promotion banners.
+- Replaced the hardcoded storefront announcement bar with the enabled announcement banner configured in admin, including its destination link. It is hidden when no enabled, scheduled announcement has text.
+- Promotion cards now render desktop images on desktop and the configured mobile image on mobile. Hero banner actions now follow the configured button label and destination without an extra hardcoded secondary action.
+- Verification: web typecheck, production build, and ESLint on `Storefront.tsx` passed. Build retains the existing non-blocking large chunk warning. Admin/banner management and live rendering were not manually exercised in a browser.
+
+## 2026-11-13 — Upload product images from product form
+
+- Replaced the product form's URL-only image input with the shared admin image field, which supports selecting a local PNG/JPG/WebP file, upload progress, error feedback, URL entry, and preview. The uploaded URL is saved through the existing create/update product API.
+- Retrieved the current admin session CSRF token for authenticated upload requests; retained the existing 5 MB client limit and server-side image validation/re-encoding.
+- Verification: `pnpm --filter @store/web typecheck`, `pnpm --filter @store/web build`, and ESLint on both changed TypeScript files passed. Build shows the existing non-blocking large chunk warning. No manual browser upload smoke test was run.
+
 ## 2026-11-12 — Add-to-cart actions on product cards
 
 - Added an add-to-cart button to catalog product cards and the related-products cards on product detail pages. Buttons add the first in-stock variant to the existing cart and are disabled when no variant is available.
