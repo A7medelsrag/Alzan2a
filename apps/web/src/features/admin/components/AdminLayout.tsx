@@ -1,6 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { getAdminSession, logoutAdmin } from "../api/auth";
+import {
+  getCachedStoreBranding,
+  STORE_BRANDING_EVENT,
+  type PublicStoreBranding,
+} from "../../../utils/store-branding";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -46,7 +51,6 @@ const navGroups: NavGroup[] = [
   {
     title: "التسويق",
     items: [
-      { label: "محتوى المتجر والبنرات", path: "/admin/homepage" },
       { label: "الإعلانات", path: "/admin/ads" },
       { label: "العروض والكوبونات", path: "/admin/marketing" },
     ],
@@ -78,6 +82,20 @@ export default function AdminLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"today" | "7days" | "30days">(timeFilter);
   const [adminUsername, setAdminUsername] = useState("");
+  const [dashboardName, setDashboardName] = useState(
+    () => getCachedStoreBranding().dashboardName,
+  );
+
+  useEffect(() => {
+    const onBrandUpdate = (event: Event) => {
+      const custom = event as CustomEvent<PublicStoreBranding>;
+      if (custom.detail?.dashboardName) {
+        setDashboardName(custom.detail.dashboardName);
+      }
+    };
+    window.addEventListener(STORE_BRANDING_EVENT, onBrandUpdate);
+    return () => window.removeEventListener(STORE_BRANDING_EVENT, onBrandUpdate);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -129,11 +147,11 @@ export default function AdminLayout({
         <div className="flex flex-col flex-1 overflow-y-auto custom-scrollbar">
           {/* Brand Logo */}
           <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
-            <Link to="/admin" className="flex flex-col gap-0.5">
+            <Link to="/admin" className="flex flex-col gap-0.5 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white font-mono">zan2a</span>
-                <span className="text-slate-500 font-light">|</span>
-                <span className="text-xl font-black text-white">زنقة</span>
+                <span className="text-lg font-black tracking-tight text-white truncate">
+                  {dashboardName}
+                </span>
               </div>
               <span className="text-xs text-slate-400 font-medium">لوحة التحكم</span>
             </Link>

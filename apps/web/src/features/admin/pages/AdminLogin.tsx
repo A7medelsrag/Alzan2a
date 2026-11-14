@@ -6,7 +6,6 @@ export default function AdminLogin() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -16,11 +15,11 @@ export default function AdminLogin() {
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      await loginAdmin(username, password, mfaCode);
+      await loginAdmin(username, password);
       navigate("/admin", { replace: true });
     } catch (error) {
       if (error instanceof AdminAuthError) {
-        if (error.kind === "invalid") setErrorMessage("البريد الإلكتروني أو اسم المستخدم أو كلمة المرور أو رمز التحقق غير صحيح.");
+        if (error.kind === "invalid") setErrorMessage("البريد الإلكتروني أو اسم المستخدم أو كلمة المرور غير صحيحة.");
         else if (error.kind === "rateLimit") setErrorMessage("محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.");
         else if (error.kind === "origin") setErrorMessage("عنوان صفحة الدخول غير مسموح به من الخادم.");
         else setErrorMessage("تعذر الاتصال بالخدمة. تأكد من تشغيل الخادم وحاول مرة أخرى.");
@@ -69,18 +68,6 @@ export default function AdminLogin() {
               {showPassword ? "إخفاء" : "إظهار"}
             </button>
           </span>
-        </label>
-        <label htmlFor="admin-mfa-code">
-          رمز تطبيق المصادقة أو رمز استرداد
-          <input
-            autoComplete="one-time-code"
-            dir="ltr"
-            id="admin-mfa-code"
-            inputMode="text"
-            onChange={(event) => setMfaCode(event.target.value)}
-            placeholder="اتركه فارغًا إذا لم يُطلب منك"
-            value={mfaCode}
-          />
         </label>
         {errorMessage && <p className="admin-login-error" role="alert">{errorMessage}</p>}
         <button className="admin-login-submit" disabled={isSubmitting} type="submit">

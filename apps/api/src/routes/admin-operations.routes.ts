@@ -193,10 +193,14 @@ export function registerAdminOperationsRoutes(
   });
   app.patch("/settings", async (r) => {
     const s = await mutate(r, "manageSettings");
+    const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "لون غير صالح (يجب أن يكون بصيغة #RRGGBB)");
     const input = body(
       z
         .object({
           storeName: z.string().trim().min(2).max(100),
+          dashboardName: z.string().trim().min(2).max(100).optional(),
+          buttonColor: hexColor.optional(),
+          backgroundColor: hexColor.optional(),
           supportPhone: z.string().max(40).nullable().optional(),
           supportWhatsApp: z.string().max(40).nullable().optional(),
           freeShippingThresholdCents: z.number().int().nonnegative(),

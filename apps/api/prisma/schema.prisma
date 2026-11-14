@@ -652,6 +652,9 @@ model CourierSettlementOrder {
 model StoreSetting {
   id                         String        @id @default("global")
   storeName                  String        @default("Zan2a")
+  dashboardName              String        @default("zan2a | زنقة")
+  buttonColor                String        @default("#7a1535")
+  backgroundColor            String        @default("#faf6f3")
   supportPhone               String?
   supportWhatsApp            String?
   freeShippingThresholdCents Int           @default(100000)

@@ -49,6 +49,9 @@ export type FinanceReport = {
 export type StoreSettings = {
   id: string;
   storeName: string;
+  dashboardName: string;
+  buttonColor: string;
+  backgroundColor: string;
   supportPhone: string | null;
   supportWhatsApp: string | null;
   freeShippingThresholdCents: number;

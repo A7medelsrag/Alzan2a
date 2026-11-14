@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import AdminRoute from "./features/admin/pages/AdminRoute";
@@ -18,11 +18,28 @@ import TermsPage from "./pages/TermsPage";
 import { WishlistProvider } from "./features/wishlist/WishlistContext";
 import WishlistDrawer from "./features/wishlist/components/WishlistDrawer";
 import Storefront from "./Storefront";
+import {
+  getCachedStoreBranding,
+  loadAndApplyStoreBranding,
+  STORE_BRANDING_EVENT,
+} from "./utils/store-branding";
 import "./admin.css";
 
 export default function App() {
   const { t } = useTranslation();
   const location = useLocation();
+  const [brandNameState, setBrandNameState] = useState(
+    () => getCachedStoreBranding().storeName,
+  );
+
+  useEffect(() => {
+    void loadAndApplyStoreBranding();
+    const onBrandChange = () => {
+      setBrandNameState(getCachedStoreBranding().storeName);
+    };
+    window.addEventListener(STORE_BRANDING_EVENT, onBrandChange);
+    return () => window.removeEventListener(STORE_BRANDING_EVENT, onBrandChange);
+  }, []);
 
   useEffect(() => {
     const pageTitles: Record<string, string> = {
@@ -35,8 +52,9 @@ export default function App() {
     const pageTitle = location.pathname.startsWith("/admin")
       ? t("adminTitle")
       : pageTitles[location.pathname] ?? null;
-    document.title = pageTitle ? `${t("brandName")} | ${pageTitle}` : t("brandName");
-  }, [location.pathname, t]);
+    const activeBrand = brandNameState || t("brandName");
+    document.title = pageTitle ? `${activeBrand} | ${pageTitle}` : activeBrand;
+  }, [location.pathname, t, brandNameState]);
 
   return (
     <CustomerSessionProvider>

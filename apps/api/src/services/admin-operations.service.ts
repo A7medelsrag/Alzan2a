@@ -410,6 +410,9 @@ export class AdminOperationsService {
     actorId: string,
     input: {
       storeName: string;
+      dashboardName?: string;
+      buttonColor?: string;
+      backgroundColor?: string;
       supportPhone?: string | null;
       supportWhatsApp?: string | null;
       freeShippingThresholdCents: number;

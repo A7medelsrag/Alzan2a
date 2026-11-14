@@ -106,6 +106,31 @@ export function buildServer(
   const homepage = new HomepageService(new HomepageRepository(database));
   app.register(async (storeApp) => {
     registerCatalogRoutes(storeApp, catalog);
+    storeApp.get("/settings", async (_request, reply) => {
+      const settings = await database.storeSetting.findUnique({
+        where: { id: "global" },
+        select: {
+          storeName: true,
+          dashboardName: true,
+          buttonColor: true,
+          backgroundColor: true,
+          supportPhone: true,
+          supportWhatsApp: true,
+          freeShippingThresholdCents: true,
+        },
+      });
+      return reply.header("Cache-Control", "no-store").send({
+        data: settings ?? {
+          storeName: "Zan2a",
+          dashboardName: "zan2a | زنقة",
+          buttonColor: "#7a1535",
+          backgroundColor: "#faf6f3",
+          supportPhone: null,
+          supportWhatsApp: null,
+          freeShippingThresholdCents: 100000,
+        },
+      });
+    });
     storeApp.get("/shipping/rates", async (_request, reply) => {
       const rates = await database.shippingRate.findMany({ where: { isEnabled: true }, orderBy: { governorate: "asc" }, select: { governorate: true, priceCents: true, minDeliveryDays: true, maxDeliveryDays: true } });
       return reply.header("Cache-Control", "public, max-age=300").send({ data: rates });
