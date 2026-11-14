@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import AdminLayout from "../components/AdminLayout";
-import AdminImageField from "../components/AdminImageField";
 import { getAdminSession } from "../api/auth";
-import { resolvePublicImageUrl } from "../../../utils/media";
 import {
   fetchAdminCategories,
   createAdminCategory,
@@ -10,429 +9,427 @@ import {
   deleteAdminCategory,
   type AdminCategory,
 } from "../api/management";
+import CategoryStatsCards from "../components/categories/CategoryStatsCards";
+import CategoryToolbar, {
+  type CategoryHierarchyFilter,
+  type CategorySortOption,
+} from "../components/categories/CategoryToolbar";
+import CategoryCard, { CategoryCardSkeleton } from "../components/categories/CategoryCard";
+import CategoryFormDrawer, { type CategoryFormValues } from "../components/categories/CategoryFormDrawer";
+import CategoryPreviewModal from "../components/categories/CategoryPreviewModal";
+import DeleteCategoryModal from "../components/categories/DeleteCategoryModal";
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
-  const [selectedCat, setSelectedCat] = useState<AdminCategory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
 
-  // Edit Form State
-  const [editName, setEditName] = useState("");
-  const [editSlug, setEditSlug] = useState("");
-  const [editImageUrl, setEditImageUrl] = useState("");
-  const [saving, setSaving] = useState(false);
+  // Search, Filter & Sort State
+  const [search, setSearch] = useState("");
+  const [hierarchyFilter, setHierarchyFilter] = useState<CategoryHierarchyFilter>("all");
+  const [sortBy, setSortBy] = useState<CategorySortOption>("name-asc");
+
+  // Drawer State (Create / Edit)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<"create" | "edit">("create");
+  const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formApiError, setFormApiError] = useState<string | null>(null);
+
+  // Preview & Delete Modal State
+  const [previewCategory, setPreviewCategory] = useState<AdminCategory | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Create Modal State
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newSlug, setNewSlug] = useState("");
-  const [newImageUrl, setNewImageUrl] = useState("");
-  const [creating, setCreating] = useState(false);
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setLoadError(null);
     try {
       const res = await fetchAdminCategories();
       setCategories(res.data);
-      if (res.data.length > 0 && !selectedCat) {
-        setSelectedCat(res.data[0]);
-        setEditName(res.data[0].name);
-        setEditSlug(res.data[0].slug);
-        setEditImageUrl(res.data[0].imageUrl || "");
-      }
     } catch {
-      setError("تعذر تحميل الأقسام من الخادم.");
+      setLoadError("تعذر تحميل الأقسام من الخادم. يرجى التحقق من الاتصال والمحاولة مرة أخرى.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    void loadData(false);
+  }, [loadData]);
 
   useEffect(() => {
     let active = true;
-    void getAdminSession().then((session) => {
-      if (active && session) setCsrfToken(session.csrfToken);
-    }).catch(() => {
-      if (active) setError("تعذر التحقق من جلسة الإدارة. حدّثي الصفحة وسجّلي الدخول مرة أخرى.");
-    });
-    return () => { active = false; };
+    void getAdminSession()
+      .then((session) => {
+        if (active && session) setCsrfToken(session.csrfToken);
+      })
+      .catch(() => {
+        if (active) {
+          setActionError("تعذر التحقق من جلسة الإدارة. حدّثي الصفحة وسجّلي الدخول مرة أخرى.");
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const handleSelect = (cat: AdminCategory) => {
-    setSelectedCat(cat);
-    setEditName(cat.name);
-    setEditSlug(cat.slug);
-    setEditImageUrl(cat.imageUrl || "");
-    setError(null);
-    setNotice(null);
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedCat) return;
-    if (!editName.trim()) {
-      setError("يرجى إدخال اسم القسم.");
-      return;
+  // Maps for parent lookup and children counts
+  const categoryById = useMemo(() => {
+    const map = new Map<string, AdminCategory>();
+    for (const cat of categories) {
+      map.set(cat.id, cat);
     }
+    return map;
+  }, [categories]);
 
-    setSaving(true);
-    setError(null);
-    setNotice(null);
-
-    const cleanSlug = editSlug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-
-    try {
-      const res = await updateAdminCategory(selectedCat.id, {
-        name: editName.trim(),
-        slug: cleanSlug || undefined,
-        imageUrl: editImageUrl.trim() || null,
-      });
-      setNotice("تم حفظ تغييرات القسم بنجاح.");
-      setCategories((prev) =>
-        prev.map((c) => (c.id === selectedCat.id ? res.data : c)),
-      );
-      setSelectedCat(res.data);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "فشل تحديث القسم.";
-      setError(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedCat) return;
-    if (selectedCat.productCount > 0) {
-      setError(`لا يمكن حذف هذا القسم لأنه يحتوي على ${selectedCat.productCount} منتج. يرجى نقل أو حذف المنتجات أولاً.`);
-      return;
-    }
-
-    if (!window.confirm(`هل أنت متأكد من رغبتك في حذف قسم "${selectedCat.name}"؟`)) {
-      return;
-    }
-
-    setDeleting(true);
-    setError(null);
-    setNotice(null);
-
-    try {
-      await deleteAdminCategory(selectedCat.id);
-      setNotice(`تم حذف قسم "${selectedCat.name}" بنجاح.`);
-      const remaining = categories.filter((c) => c.id !== selectedCat.id);
-      setCategories(remaining);
-      if (remaining.length > 0) {
-        handleSelect(remaining[0]);
+  const childrenByParentId = useMemo(() => {
+    const map = new Map<string, AdminCategory[]>();
+    for (const cat of categories) {
+      if (!cat.parentId) continue;
+      const list = map.get(cat.parentId);
+      if (list) {
+        list.push(cat);
       } else {
-        setSelectedCat(null);
+        map.set(cat.parentId, [cat]);
+      }
+    }
+    return map;
+  }, [categories]);
+
+  const filteredCategories = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const list = categories.filter((cat) => {
+      if (hierarchyFilter === "root" && cat.parentId) return false;
+      if (hierarchyFilter === "sub" && !cat.parentId) return false;
+
+      if (query) {
+        const parentName = cat.parentId ? categoryById.get(cat.parentId)?.name.toLowerCase() ?? "" : "";
+        const matchesName = cat.name.toLowerCase().includes(query);
+        const matchesSlug = cat.slug.toLowerCase().includes(query);
+        const matchesParent = parentName.includes(query);
+        if (!matchesName && !matchesSlug && !matchesParent) return false;
+      }
+
+      return true;
+    });
+
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case "name-desc":
+          return b.name.localeCompare(a.name, "ar");
+        case "products-desc":
+          return b.productCount - a.productCount || a.name.localeCompare(b.name, "ar");
+        case "products-asc":
+          return a.productCount - b.productCount || a.name.localeCompare(b.name, "ar");
+        case "name-asc":
+        default:
+          return a.name.localeCompare(b.name, "ar");
+      }
+    });
+
+    return sorted;
+  }, [categories, search, hierarchyFilter, sortBy, categoryById]);
+
+  const openCreateDrawer = () => {
+    setDrawerMode("create");
+    setEditingCategory(null);
+    setFormApiError(null);
+    setDrawerOpen(true);
+  };
+
+  const openEditDrawer = (cat: AdminCategory) => {
+    setDrawerMode("edit");
+    setEditingCategory(cat);
+    setFormApiError(null);
+    setDrawerOpen(true);
+  };
+
+  const handleFormSubmit = async (values: CategoryFormValues) => {
+    setSubmitting(true);
+    setFormApiError(null);
+    setActionError(null);
+    setNotice(null);
+
+    try {
+      if (drawerMode === "create") {
+        const res = await createAdminCategory({
+          name: values.name,
+          slug: values.slug,
+          parentId: values.parentId,
+          imageUrl: values.imageUrl,
+        });
+        const created: AdminCategory = {
+          ...res.data,
+          productCount: res.data.productCount ?? 0,
+        };
+        setCategories((prev) => [...prev, created]);
+        setNotice(`تم إنشاء قسم "${created.name}" بنجاح.`);
+        setDrawerOpen(false);
+      } else if (editingCategory) {
+        const res = await updateAdminCategory(editingCategory.id, {
+          name: values.name,
+          slug: values.slug,
+          parentId: values.parentId,
+          imageUrl: values.imageUrl,
+        });
+        const updated: AdminCategory = {
+          ...res.data,
+          productCount: res.data.productCount ?? editingCategory.productCount,
+        };
+        setCategories((prev) =>
+          prev.map((c) => (c.id === editingCategory.id ? updated : c)),
+        );
+        setNotice(`تم حفظ تغييرات قسم "${updated.name}" بنجاح.`);
+        setDrawerOpen(false);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "فشل حذف القسم.";
-      setError(msg);
+      const msg = err instanceof Error ? err.message : "حدث خطأ أثناء حفظ بيانات القسم.";
+      setFormApiError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setActionError(null);
+    setNotice(null);
+
+    try {
+      await deleteAdminCategory(deleteTarget.id);
+      const deletedName = deleteTarget.name;
+      setDeleteTarget(null);
+      setNotice(`تم حذف قسم "${deletedName}" بنجاح.`);
+      // Reload from server so any cascade-deleted subcategories are accurately reflected
+      await loadData(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "تعذر حذف القسم.";
+      setActionError(msg);
+      setDeleteTarget(null);
     } finally {
       setDeleting(false);
     }
   };
 
-  const handleCreate = async () => {
-    if (!newName.trim()) {
-      setError("يرجى كتابة اسم القسم الجديد.");
-      return;
-    }
-
-    setCreating(true);
-    setError(null);
-    setNotice(null);
-
-    const cleanSlug = newSlug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-
-    try {
-      const res = await createAdminCategory({
-        name: newName.trim(),
-        slug: cleanSlug || undefined,
-        imageUrl: newImageUrl.trim() || null,
-      });
-      setNotice(`تم إنشاء قسم "${res.data.name}" بنجاح.`);
-      setCategories((prev) => [...prev, res.data]);
-      handleSelect(res.data);
-      setShowCreateModal(false);
-      setNewName("");
-      setNewSlug("");
-      setNewImageUrl("");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "فشل إضافة القسم.";
-      setError(msg);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const filteredCategories = categories.filter((c) => {
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.slug.includes(search)) {
-      return false;
-    }
-    return true;
-  });
-
   return (
     <AdminLayout
-      title="الأقسام"
-      subtitle="تنظيم أقسام وتصنيفات المتجر وترتيبها"
+      title="إدارة الأقسام"
+      subtitle="تنظيم أقسام المتجر والأقسام الفرعية وإدارة صورها وربطها بالمنتجات"
       headerActions={
         <button
           type="button"
-          onClick={() => {
-            setShowCreateModal(true);
-            setError(null);
-          }}
-          className="flex items-center gap-1.5 bg-[#7a1535] hover:bg-[#962046] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors"
+          onClick={openCreateDrawer}
+          className="inline-flex items-center gap-1.5 bg-[#C8102E] hover:bg-[#a50d26] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0"
         >
-          <span>+</span>
+          <span className="text-sm leading-none">+</span>
           <span>إضافة قسم جديد</span>
         </button>
       }
     >
+      {/* Breadcrumbs */}
+      <nav aria-label="مسار التنقل" className="flex items-center gap-2 text-xs text-neutral-500">
+        <Link to="/admin" className="hover:text-[#C8102E] font-medium transition-colors">
+          الرئيسية
+        </Link>
+        <span aria-hidden="true" className="text-neutral-300">/</span>
+        <span>المتجر</span>
+        <span aria-hidden="true" className="text-neutral-300">/</span>
+        <span className="font-bold text-[#101B30]">إدارة الأقسام</span>
+      </nav>
+
+      {/* Feedback Alerts */}
       {notice && (
-        <div className="mb-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
-          <span>{notice}</span>
-          <button onClick={() => setNotice(null)} className="font-bold">×</button>
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="font-bold">×</button>
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-xl w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-              <h3 className="text-sm font-bold text-neutral-900">إضافة قسم جديد</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-neutral-400 hover:text-neutral-700 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
-                  اسم القسم (عربي) *
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="مثال: فساتين سهرة"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs text-neutral-900 focus:outline-hidden focus:border-[#7a1535]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
-                  الرابط (slug إنجليزي)
-                </label>
-                <input
-                  type="text"
-                  value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
-                  placeholder="مثال: evening-dresses"
-                  dir="ltr"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs text-neutral-900 text-left font-mono focus:outline-hidden focus:border-[#7a1535]"
-                />
-              </div>
-              <AdminImageField
-                csrfToken={csrfToken}
-                label="رابط صورة القسم (اختياري)"
-                value={newImageUrl}
-                disabled={creating}
-                onChange={setNewImageUrl}
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                disabled={creating}
-                onClick={() => void handleCreate()}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#7a1535] hover:bg-[#962046] text-white shadow-xs disabled:opacity-50"
-              >
-                {creating ? "جاري الإنشاء..." : "إنشاء القسم"}
-              </button>
-            </div>
+        <div
+          role="status"
+          className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <span>{notice}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="إغلاق التنبيه"
+            className="text-emerald-700 hover:text-emerald-900 font-bold px-1"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Categories List (2 Cols on lg) */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-neutral-100 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-4">
-            <div>
-              <h2 className="text-base font-bold text-neutral-900">أقسام المتجر</h2>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                إجمالي {categories.length} أقسام مسجلة في قاعدة البيانات.
-              </p>
-            </div>
-            <div className="w-full sm:w-64">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="بحث في الأقسام..."
-                className="w-full px-3.5 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-hidden focus:border-[#7a1535]"
-              />
-            </div>
+      {actionError && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-[#C8102E] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{actionError}</span>
           </div>
-
-          {loading ? (
-            <div className="py-16 text-center text-xs text-neutral-400">
-              جاري تحميل الأقسام...
-            </div>
-          ) : filteredCategories.length === 0 ? (
-            <div className="py-16 text-center text-xs text-neutral-400">
-              لا توجد أقسام تطابق البحث.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredCategories.map((cat) => {
-                const isSelected = selectedCat?.id === cat.id;
-                return (
-                  <div
-                    key={cat.id}
-                    onClick={() => handleSelect(cat)}
-                    className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-[#7a1535] ring-2 ring-[#7a1535]/10 shadow-xs bg-[#fbf5f7]"
-                        : "border-neutral-200/70 hover:border-neutral-300 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {cat.imageUrl ? (
-                        <img
-                          src={resolvePublicImageUrl(cat.imageUrl)}
-                          alt={cat.name}
-                          className="w-10 h-10 rounded-full object-cover border border-neutral-200 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2a1020] to-[#4c0d28] flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-xs">
-                          {cat.name.slice(0, 1)}
-                        </div>
-                      )}
-                      <div>
-                        <span className="font-bold text-xs text-neutral-900 block">
-                          {cat.name}
-                        </span>
-                        <span className="text-[11px] font-mono text-neutral-400">
-                          /{cat.slug} • {cat.productCount} منتج
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#7a1535] hover:underline">
-                        تعديل
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label="إغلاق التنبيه"
+            className="text-rose-700 hover:text-rose-900 font-bold px-1"
+          >
+            ✕
+          </button>
         </div>
+      )}
 
-        {/* Edit Category Side Panel (1 Col on lg) */}
-        <div className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-xs space-y-4">
-          <div className="border-b border-neutral-100 pb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-neutral-900">تفاصيل وتعديل القسم</h3>
-            {selectedCat && (
-              <span className="text-xs font-mono text-neutral-400">
-                {selectedCat.productCount} منتج
-              </span>
-            )}
+      {/* Statistics Summary Row */}
+      <CategoryStatsCards categories={categories} loading={loading} />
+
+      {/* Search & Filter Toolbar */}
+      <CategoryToolbar
+        search={search}
+        onSearchChange={setSearch}
+        hierarchyFilter={hierarchyFilter}
+        onHierarchyFilterChange={setHierarchyFilter}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        onRefresh={() => void loadData(true)}
+        refreshing={refreshing}
+        totalCount={categories.length}
+        filteredCount={filteredCategories.length}
+      />
+
+      {/* Main Category Grid / States */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <CategoryCardSkeleton key={index} />
+          ))}
+        </div>
+      ) : loadError ? (
+        <div className="bg-white rounded-2xl border border-rose-200 p-10 text-center space-y-4 shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-[#C8102E] flex items-center justify-center mx-auto">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
-
-          {!selectedCat ? (
-            <div className="py-12 text-center text-xs text-neutral-400">
-              اختر قسماً من القائمة لعرض تفاصيله أو تعديله.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-                  اسم القسم (عربي) *
-                </label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-900 focus:outline-hidden focus:border-[#7a1535]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-                  الرابط المخصص (slug)
-                </label>
-                <input
-                  type="text"
-                  value={editSlug}
-                  onChange={(e) => setEditSlug(e.target.value)}
-                  dir="ltr"
-                  className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-900 text-left font-mono focus:outline-hidden focus:border-[#7a1535]"
-                />
-              </div>
-
-              <AdminImageField
-                csrfToken={csrfToken}
-                label="رابط صورة القسم"
-                value={editImageUrl}
-                disabled={saving}
-                onChange={setEditImageUrl}
-              />
-
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-3 border-t border-neutral-100">
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void handleUpdate()}
-                  className="w-full py-2.5 rounded-xl text-xs font-bold bg-[#1b1420] text-white hover:bg-neutral-800 transition-colors shadow-xs disabled:opacity-50"
-                >
-                  {saving ? "جاري الحفظ..." : "حفظ التغييرات"}
-                </button>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => void handleDelete()}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
-                >
-                  {deleting ? "جاري الحذف..." : "حذف القسم"}
-                </button>
-                <p className="text-[10px] text-neutral-400 text-center">
-                  لا يمكن حذف قسم به منتجات، انقلي المنتجات أولاً.
-                </p>
-              </div>
-            </div>
-          )}
+          <div className="space-y-1 max-w-md mx-auto">
+            <h2 className="text-base font-bold text-[#101B30]">تعذر تحميل الأقسام</h2>
+            <p className="text-xs text-neutral-500 leading-relaxed">{loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadData(false)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C8102E] hover:bg-[#a50d26] text-xs font-bold text-white shadow-xs transition-colors"
+          >
+            إعادة المحاولة
+          </button>
         </div>
-      </div>
+      ) : categories.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center space-y-4 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-[#101B30]/5 border border-[#D6A33A]/30 text-[#101B30] flex items-center justify-center mx-auto">
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          </div>
+          <div className="space-y-1 max-w-md mx-auto">
+            <h2 className="text-base font-black text-[#101B30]">لم يتم إضافة أي أقسام بعد</h2>
+            <p className="text-xs text-neutral-500 leading-relaxed">
+              ابدأ بإضافة أول قسم لتنظيم منتجات متجرك وتسهيل تصفح العملاء.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateDrawer}
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#C8102E] hover:bg-[#a50d26] text-xs font-bold text-white shadow-xs transition-colors"
+          >
+            <span>+</span>
+            <span>إضافة أول قسم</span>
+          </button>
+        </div>
+      ) : filteredCategories.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-neutral-200/80 p-10 text-center space-y-3 shadow-xs">
+          <p className="text-sm font-bold text-[#101B30]">لا توجد أقسام تطابق البحث أو التصفية</p>
+          <p className="text-xs text-neutral-500">جرّب تعديل كلمات البحث أو مسح الفلاتر لعرض جميع الأقسام.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setHierarchyFilter("all");
+            }}
+            className="inline-flex items-center px-4 py-2 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-xs font-bold text-[#101B30] transition-colors"
+          >
+            إعادة تعيين الفلاتر
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredCategories.map((cat) => {
+            const parentName = cat.parentId ? categoryById.get(cat.parentId)?.name ?? null : null;
+            const childrenCount = childrenByParentId.get(cat.id)?.length ?? 0;
+            return (
+              <CategoryCard
+                key={cat.id}
+                category={cat}
+                parentName={parentName}
+                childrenCount={childrenCount}
+                onPreview={setPreviewCategory}
+                onEdit={openEditDrawer}
+                onDelete={setDeleteTarget}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add / Edit Category Drawer */}
+      <CategoryFormDrawer
+        open={drawerOpen}
+        mode={drawerMode}
+        category={editingCategory}
+        categories={categories}
+        csrfToken={csrfToken}
+        submitting={submitting}
+        apiError={formApiError}
+        onCsrfTokenChange={setCsrfToken}
+        onClose={() => setDrawerOpen(false)}
+        onSubmit={handleFormSubmit}
+      />
+
+      {/* Category Preview Modal */}
+      <CategoryPreviewModal
+        category={previewCategory}
+        parentCategory={
+          previewCategory?.parentId ? categoryById.get(previewCategory.parentId) ?? null : null
+        }
+        subcategories={
+          previewCategory ? childrenByParentId.get(previewCategory.id) ?? [] : []
+        }
+        onClose={() => setPreviewCategory(null)}
+        onEdit={openEditDrawer}
+        onSelectCategory={setPreviewCategory}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteCategoryModal
+        category={deleteTarget}
+        childrenCount={deleteTarget ? childrenByParentId.get(deleteTarget.id)?.length ?? 0 : 0}
+        deleting={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </AdminLayout>
   );
 }

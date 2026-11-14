@@ -17,20 +17,21 @@ export interface AdminOrderListResponse {
   data: OrderPublic[];
   pagination: {
     page: number;
-    limit: number;
+    pageSize: number;
     total: number;
+    totalPages: number;
   };
 }
 
 export async function listAdminOrders(params?: {
   status?: OrderStatus;
   page?: number;
-  limit?: number;
+  pageSize?: number;
 }): Promise<AdminOrderListResponse> {
   const queryParts: string[] = [];
   if (params?.status) queryParts.push(`status=${encodeURIComponent(params.status)}`);
   if (params?.page) queryParts.push(`page=${encodeURIComponent(params.page)}`);
-  if (params?.limit) queryParts.push(`limit=${encodeURIComponent(params.limit)}`);
+  if (params?.pageSize) queryParts.push(`pageSize=${encodeURIComponent(params.pageSize)}`);
   const queryString = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
   const requestPath = `${adminOrdersApiPath}${queryString}`;
 

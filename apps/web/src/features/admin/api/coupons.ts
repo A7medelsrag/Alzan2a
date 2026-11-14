@@ -36,7 +36,11 @@ export async function listAdminCoupons(): Promise<{ data: CouponPublic[] }> {
       body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "code" in body.error
         ? (body.error.code as string)
         : "ERROR";
-    throw new AdminCouponApiError(code, response.status);
+    const message =
+      body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "message" in body.error
+        ? (body.error.message as string)
+        : undefined;
+    throw new AdminCouponApiError(code, response.status, message);
   }
 
   return body as { data: CouponPublic[] };
@@ -107,7 +111,11 @@ export async function updateAdminCoupon(
       body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "code" in body.error
         ? (body.error.code as string)
         : "ERROR";
-    throw new AdminCouponApiError(code, response.status);
+    const message =
+      body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "message" in body.error
+        ? (body.error.message as string)
+        : undefined;
+    throw new AdminCouponApiError(code, response.status, message);
   }
 
   return body as { data: CouponPublic };
@@ -138,7 +146,11 @@ export async function deleteAdminCoupon(
       body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "code" in body.error
         ? (body.error.code as string)
         : "ERROR";
-    throw new AdminCouponApiError(code, response.status);
+    const message =
+      body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "message" in body.error
+        ? (body.error.message as string)
+        : undefined;
+    throw new AdminCouponApiError(code, response.status, message);
   }
 
   return body as { success: true };

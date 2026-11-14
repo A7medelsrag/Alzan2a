@@ -172,58 +172,12 @@ export class OrderService {
     const existing = await this.orders.findById(orderId);
     if (!existing) throw new AppError("ORDER_NOT_FOUND", 404);
 
-    const currentStatus = existing.status;
-    const nextStatus = input.status;
-
-    if (currentStatus !== nextStatus) {
-      const validTransitions: Record<string, string[]> = {
-        PENDING: ["CONFIRMED", "CANCELLED"], CONFIRMED: ["PROCESSING", "CANCELLED"],
-        PROCESSING: ["SHIPPED", "CANCELLED"], SHIPPED: ["DELIVERED", "RETURNED"],
-        DELIVERED: ["RETURNED"], CANCELLED: [], RETURNED: [],
-      };
-      if (!validTransitions[currentStatus]?.includes(nextStatus)) {
-        throw new AppError("INVALID_STATUS_TRANSITION", 400, "Invalid order status transition.");
-      }
-      /*
-      if (currentStatus === "CANCELLED" || currentStatus === "RETURNED") {
-        throw new AppError(
-          "INVALID_STATUS_TRANSITION",
-          400,
-          "لا يمكن تعديل حالة طلب ملغي أو مرتجع نهائيًا.",
-        );
-      }
-
-      if (nextStatus === "CANCELLED") {
-        if (!["PENDING", "CONFIRMED", "PROCESSING"].includes(currentStatus)) {
-          throw new AppError(
-            "INVALID_STATUS_TRANSITION",
-            400,
-            "لا يمكن إلغاء الطلب بعد خروجه للشحن أو تسليمه.",
-          );
-        }
-      }
-
-      if (nextStatus === "RETURNED") {
-        if (!["SHIPPED", "DELIVERED"].includes(currentStatus)) {
-          throw new AppError(
-            "INVALID_STATUS_TRANSITION",
-            400,
-            "لا يمكن إرجاع طلب لم يتم شحنه أو تسليمه بعد.",
-          );
-        }
-      }
-      */
-    }
-
     try {
       const updated = await withSerializableRetry(() =>
         this.orders.updateStatus(orderId, input, actorId),
       );
       return { data: this.toPublicOrder(updated) };
     } catch (error) {
-      if (error instanceof Error && error.message === "INVALID_STATUS_TRANSITION") {
-        throw new AppError("INVALID_STATUS_TRANSITION", 400, "Invalid order status transition.");
-      }
       if (error instanceof CheckoutUnavailableError) {
         throw new AppError("OUT_OF_STOCK_OR_UNAVAILABLE", 409, error.message);
       }

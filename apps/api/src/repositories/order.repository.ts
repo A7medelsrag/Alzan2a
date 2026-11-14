@@ -123,18 +123,6 @@ export class OrderRepository {
       if (!existing) {
         throw new Error("ORDER_NOT_FOUND");
       }
-      const allowedNext: Record<string, string[]> = {
-        PENDING: ["CONFIRMED", "CANCELLED"],
-        CONFIRMED: ["PROCESSING", "CANCELLED"],
-        PROCESSING: ["SHIPPED", "CANCELLED"],
-        SHIPPED: ["DELIVERED", "RETURNED"],
-        DELIVERED: ["RETURNED"],
-        CANCELLED: [],
-        RETURNED: [],
-      };
-      if (data.status !== existing.status && !allowedNext[existing.status]?.includes(data.status)) {
-        throw new Error("INVALID_STATUS_TRANSITION");
-      }
 
       const isCurrentlyRestocked = existing.status === "CANCELLED" || existing.status === "RETURNED";
       const isTargetRestocked = data.status === "CANCELLED" || data.status === "RETURNED";

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import type { CreateOrderInput } from "@store/shared";
 import { CheckoutUnavailableError, OrderRepository } from "../repositories/order.repository.js";
@@ -182,47 +182,40 @@ describe("OrderService", () => {
     });
   });
 
-  it("enforces order state machine transition rules", async () => {
-    // 1. Cannot cancel after shipping
-    const shippedOrder = { ...mockSampleOrder, status: "SHIPPED" as const };
-    const repo1 = {
-      findById: async () => shippedOrder,
-    } as unknown as OrderRepository;
-    const service1 = new OrderService(repo1, "test-secret");
+  it("allows admins to set an order directly to any status", async () => {
+    const updatedOrder = { ...mockSampleOrder, status: "SHIPPED" as const };
+    const tx = {
+      order: {
+        findUnique: vi.fn().mockResolvedValue({ ...mockSampleOrder, items: [] }),
+        update: vi.fn().mockResolvedValue(updatedOrder),
+      },
+      orderEvent: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const database = {
+      order: { findUnique: vi.fn().mockResolvedValue(mockSampleOrder) },
+      $transaction: vi.fn((operation: (client: typeof tx) => Promise<unknown>) => operation(tx)),
+    } as unknown as PrismaClient;
+    const repository = new OrderRepository(database);
+    const service = new OrderService(repository, "test-secret");
 
-    await expect(
-      service1.updateOrderStatusByAdmin(shippedOrder.id, { status: "CANCELLED" }),
-    ).rejects.toMatchObject({
-      code: "INVALID_STATUS_TRANSITION",
-      statusCode: 400,
+    const result = await service.updateOrderStatusByAdmin(mockSampleOrder.id, {
+      status: "SHIPPED",
     });
 
-    // 2. Cannot return before shipping
-    const pendingOrder = { ...mockSampleOrder, status: "PENDING" as const };
-    const repo2 = {
-      findById: async () => pendingOrder,
-    } as unknown as OrderRepository;
-    const service2 = new OrderService(repo2, "test-secret");
-
-    await expect(
-      service2.updateOrderStatusByAdmin(pendingOrder.id, { status: "RETURNED" }),
-    ).rejects.toMatchObject({
-      code: "INVALID_STATUS_TRANSITION",
-      statusCode: 400,
-    });
-
-    // 3. Terminal state CANCELLED cannot transition
-    const cancelledOrder = { ...mockSampleOrder, status: "CANCELLED" as const };
-    const repo3 = {
-      findById: async () => cancelledOrder,
-    } as unknown as OrderRepository;
-    const service3 = new OrderService(repo3, "test-secret");
-
-    await expect(
-      service3.updateOrderStatusByAdmin(cancelledOrder.id, { status: "CONFIRMED" }),
-    ).rejects.toMatchObject({
-      code: "INVALID_STATUS_TRANSITION",
-      statusCode: 400,
+    expect(result.data.status).toBe("SHIPPED");
+    expect(tx.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: mockSampleOrder.id },
+        data: expect.objectContaining({ status: "SHIPPED" }),
+      }),
+    );
+    expect(tx.orderEvent.create).toHaveBeenCalledWith({
+      data: {
+        orderId: mockSampleOrder.id,
+        actorId: undefined,
+        fromStatus: "PENDING",
+        toStatus: "SHIPPED",
+      },
     });
   });
 

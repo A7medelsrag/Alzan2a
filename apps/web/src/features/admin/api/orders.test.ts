@@ -13,17 +13,17 @@ describe("admin orders api", () => {
   it("lists orders with query params", async () => {
     const mockResponse = {
       data: [{ id: "order_1", status: "PENDING" }],
-      pagination: { page: 1, limit: 20, total: 1 },
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
     };
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       json: async () => mockResponse,
     });
 
-    const res = await listAdminOrders({ status: "PENDING", page: 1 });
+    const res = await listAdminOrders({ status: "PENDING", page: 1, pageSize: 50 });
     expect(res.data).toHaveLength(1);
     expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining("status=PENDING"),
+      expect.stringContaining("status=PENDING&page=1&pageSize=50"),
       expect.objectContaining({ method: "GET" }),
     );
   });

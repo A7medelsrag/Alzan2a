@@ -17,6 +17,7 @@ import AdminShipping from "../features/admin/pages/AdminShipping";
 import AdminStaff from "../features/admin/pages/AdminStaff";
 import AdminSettings from "../features/admin/pages/AdminSettings";
 import HomepageManagement from "../features/admin/pages/HomepageManagement";
+import AdminAds from "../features/admin/pages/AdminAds";
 
 export default function AdminDashboard() {
   const { pathname } = useLocation();
@@ -52,7 +53,7 @@ export default function AdminDashboard() {
     return <AdminReviews />;
   }
   if (pathname.startsWith("/admin/ads")) {
-    return <HomepageManagement />;
+    return <AdminAds />;
   }
   if (pathname.startsWith("/admin/homepage")) {
     return <HomepageManagement />;
