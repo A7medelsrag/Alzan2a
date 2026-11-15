@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "StoreSetting"
+ADD COLUMN IF NOT EXISTS "dashboardName" TEXT NOT NULL DEFAULT 'zan2a | زنقة',
+ADD COLUMN IF NOT EXISTS "buttonColor" TEXT NOT NULL DEFAULT '#7a1535',
+ADD COLUMN IF NOT EXISTS "backgroundColor" TEXT NOT NULL DEFAULT '#faf6f3';
