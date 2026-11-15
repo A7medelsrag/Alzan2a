@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @store/web...",
+  "buildCommand": "cd ../.. && pnpm --filter @store/web build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://alzan2a-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/health/:path*",
+      "destination": "https://alzan2a-production.up.railway.app/health/:path*"
+    },
+    {
+      "source": "/((?!api/|health/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
