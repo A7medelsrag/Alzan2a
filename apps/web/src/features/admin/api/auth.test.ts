@@ -84,6 +84,22 @@ describe("admin authentication requests", () => {
     });
   });
 
+  it("reports missing MFA challenge separately from invalid credentials", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: "ADMIN_MFA_REQUIRED" } }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(loginAdmin("admin", "example-password", "")).rejects.toMatchObject({
+      kind: "mfaRequired",
+    });
+  });
+
   it("sends the admin CSRF token when ending a session", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);

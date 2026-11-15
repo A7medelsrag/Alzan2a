@@ -3,7 +3,7 @@ import { adminSessionResponseSchema } from "@store/shared";
 const adminAuthPath = "/api/v1/admin/auth";
 const requestTimeoutMs = 8_000;
 
-export type AdminAuthErrorKind = "invalid" | "rateLimit" | "origin" | "unavailable";
+export type AdminAuthErrorKind = "invalid" | "mfaRequired" | "rateLimit" | "origin" | "unavailable";
 
 export class AdminAuthError extends Error {
   public constructor(public readonly kind: AdminAuthErrorKind) {
@@ -57,6 +57,15 @@ export async function verifyAdminSession(signal?: AbortSignal): Promise<boolean>
   return (await getAdminSession(signal)) !== null;
 }
 
+async function isMfaRequiredResponse(response: Response): Promise<boolean> {
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown } };
+    return body?.error?.code === "ADMIN_MFA_REQUIRED";
+  } catch {
+    return false;
+  }
+}
+
 export async function loginAdmin(username: string, password: string, mfaCode?: string): Promise<void> {
   const credentials = {
     username,
@@ -69,7 +78,9 @@ export async function loginAdmin(username: string, password: string, mfaCode?: s
     body: JSON.stringify(credentials),
   });
 
-  if (response.status === 401) throw new AdminAuthError("invalid");
+  if (response.status === 401) {
+    throw new AdminAuthError((await isMfaRequiredResponse(response)) ? "mfaRequired" : "invalid");
+  }
   if (response.status === 429) throw new AdminAuthError("rateLimit");
   if (response.status === 403) throw new AdminAuthError("origin");
   if (!response.ok) throw new AdminAuthError("unavailable");
