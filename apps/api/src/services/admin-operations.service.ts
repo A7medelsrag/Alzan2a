@@ -1,18 +1,10 @@
 import argon2 from "argon2";
 import type { PrismaClient, AdminRole } from "@prisma/client";
 import { AppError } from "../errors.js";
-import {
-  createTotpUri,
-  encryptTotpSecret,
-  generateRecoveryCodes,
-  generateTotpSecret,
-  hashRecoveryCode,
-} from "./admin-crypto.js";
 
 export class AdminOperationsService {
   constructor(
     private readonly db: PrismaClient,
-    private readonly encryptionKey: string
   ) {}
 
   async getPurchases() {
@@ -457,11 +449,8 @@ export class AdminOperationsService {
     actorId: string,
     input: { username: string; password: string; role: Exclude<AdminRole, "OWNER"> }
   ) {
-    if (!this.encryptionKey) throw new AppError("SERVICE_UNAVAILABLE", 503);
     if (input.password.length < 15 || /^(password|qwerty|123456|letmein)/i.test(input.password))
       throw new AppError("ADMIN_PASSWORD_POLICY", 400);
-    const secret = generateTotpSecret(),
-      recovery = generateRecoveryCodes();
     const data = await this.db.$transaction(async (tx) => {
       const staff = await tx.adminAccount.create({
         data: {
@@ -473,8 +462,7 @@ export class AdminOperationsService {
             parallelism: 1,
           }),
           role: input.role,
-          mfaSecretEncrypted: encryptTotpSecret(secret, this.encryptionKey),
-          recoveryCodes: { create: recovery.map((code) => ({ codeHash: hashRecoveryCode(code) })) },
+          mfaSecretEncrypted: "DISABLED",
         },
       });
       await tx.auditLog.create({
@@ -488,10 +476,7 @@ export class AdminOperationsService {
       });
       return { id: staff.id, username: staff.username, role: staff.role, isActive: staff.isActive };
     });
-    return {
-      data,
-      provisioning: { otpauthUrl: createTotpUri(secret, input.username), recoveryCodes: recovery },
-    };
+    return { data };
   }
   async updateStaff(
     actorId: string,
@@ -519,9 +504,6 @@ export class AdminOperationsService {
     });
   }
   async resetStaffMfa(actorId: string, id: string) {
-    if (!this.encryptionKey) throw new AppError("SERVICE_UNAVAILABLE", 503);
-    const secret = generateTotpSecret(),
-      recovery = generateRecoveryCodes();
     const data = await this.db.$transaction(async (tx) => {
       const staff = await tx.adminAccount.findUnique({ where: { id } });
       if (!staff) throw new AppError("STAFF_NOT_FOUND", 404);
@@ -530,9 +512,8 @@ export class AdminOperationsService {
       await tx.adminAccount.update({
         where: { id },
         data: {
-          mfaSecretEncrypted: encryptTotpSecret(secret, this.encryptionKey),
+          mfaSecretEncrypted: "DISABLED",
           lastTotpCounter: null,
-          recoveryCodes: { create: recovery.map((code) => ({ codeHash: hashRecoveryCode(code) })) },
         },
       });
       await tx.auditLog.create({
@@ -540,10 +521,7 @@ export class AdminOperationsService {
       });
       return { id, username: staff.username };
     });
-    return {
-      data,
-      provisioning: { otpauthUrl: createTotpUri(secret, data.username), recoveryCodes: recovery },
-    };
+    return { data };
   }
 }
 

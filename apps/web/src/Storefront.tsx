@@ -207,6 +207,8 @@ export default function Storefront() {
   const visibleSections = homepage?.sections.filter((section) => sectionHasContent(section)) ?? [];
   const heading = submittedSearch ? t("searchResultsFor", { query: submittedSearch }) : t("collection");
   const heroPromotions = promotionalBanners.slice(0, 2);
+  const hasHeroSidePromotions =
+    topSideBanners.length > 0 || bottomSideBanners.length > 0 || heroPromotions.length > 0;
   const heroImageUrl = homepage?.sections.find((section) => section.type === "BRAND_STORY")?.imageUrl
     ?? products.find((product) => product.imageUrl)?.imageUrl
     ?? null;
@@ -360,11 +362,11 @@ export default function Storefront() {
           </p>
         )}
         {homeStatus === "ready" && !submittedSearch && activeCategory === "all" && (
-          <div className="homepage-hero">
+          <div className={`homepage-hero${hasHeroSidePromotions ? "" : " homepage-hero--single"}`}>
             {heroBanners.length > 0
               ? <CampaignSlider banners={heroBanners} />
               : <DefaultHero imageUrl={heroImageUrl} />}
-            {!submittedSearch && (topSideBanners.length > 0 || bottomSideBanners.length > 0 || heroPromotions.length > 0) && (
+            {hasHeroSidePromotions && (
               <HeroSidePromotions
                 topBanners={topSideBanners.length > 0 ? topSideBanners : heroPromotions.slice(0, 1)}
                 bottomBanners={bottomSideBanners.length > 0 ? bottomSideBanners : heroPromotions.slice(1, 2)}

@@ -2,23 +2,10 @@ import { createInterface } from "node:readline";
 import { Prisma, PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import { adminLoginSchema } from "@store/shared";
-import { loadConfig } from "../config.js";
-import {
-  createTotpUri,
-  encryptTotpSecret,
-  generateRecoveryCodes,
-  generateTotpSecret,
-  hashRecoveryCode,
-  verifyTotp,
-} from "../services/admin-crypto.js";
 
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-  const mfaEncryptionKey = config.adminMfaEncryptionKey;
-  if (!mfaEncryptionKey) throw new Error("ADMIN_MFA_ENCRYPTION_KEY must be configured");
-
   const username = await askLine("Owner username: ");
   const parsedUsername = adminLoginSchema.shape.username.safeParse(username);
   if (!parsedUsername.success) throw new Error("Username must be 3-64 lowercase letters, digits, dots, underscores, or hyphens");
@@ -30,20 +17,12 @@ async function main(): Promise<void> {
     throw new Error("Passwords do not match");
   }
 
-  const secret = generateTotpSecret();
-  process.stdout.write(`\nAdd this TOTP account to an authenticator app:\n${createTotpUri(secret, parsedUsername.data)}\n`);
-  process.stdout.write(`Secret: ${secret}\n`);
-  const code = await askSecret("Authenticator code: ");
-  const counter = verifyTotp(secret, code);
-  if (counter === null) throw new Error("Invalid authenticator code; owner account was not created");
-
   const passwordHash = await argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: 19_456,
     timeCost: 2,
     parallelism: 1,
   });
-  const recoveryCodes = generateRecoveryCodes();
   await prisma.$transaction(async (transaction) => {
     if (await transaction.adminAccount.count() !== 0) {
       throw new Error("An admin account already exists; the bootstrap command only creates the first Owner");
@@ -52,15 +31,8 @@ async function main(): Promise<void> {
       data: {
         username: parsedUsername.data,
         passwordHash,
-        mfaSecretEncrypted: encryptTotpSecret(secret, mfaEncryptionKey),
-        lastTotpCounter: counter,
+        mfaSecretEncrypted: "DISABLED",
       },
-    });
-    await transaction.adminRecoveryCode.createMany({
-      data: recoveryCodes.map((recoveryCode) => ({
-        adminId: owner.id,
-        codeHash: hashRecoveryCode(recoveryCode),
-      })),
     });
     await transaction.auditLog.create({
       data: {
@@ -72,8 +44,7 @@ async function main(): Promise<void> {
     });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-  process.stdout.write("\nOwner created. Store these one-time recovery codes somewhere safe:\n");
-  for (const recoveryCode of recoveryCodes) process.stdout.write(`${recoveryCode}\n`);
+  process.stdout.write("\nOwner created.\n");
 }
 
 function askLine(prompt: string): Promise<string> {

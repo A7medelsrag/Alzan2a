@@ -173,7 +173,7 @@ export function buildServer(
     registerStoreOfferRoutes(storeApp, productOffers, bundles);
   }, { prefix: "/api/v1/store" });
   const adminSessions = adminSessionStore ?? (redis ? new RedisAdminSessionStore(redis) : undefined);
-  const admins = new AdminService(new AdminRepository(database), adminSessions, config.adminMfaEncryptionKey);
+  const admins = new AdminService(new AdminRepository(database), adminSessions);
   const uploadRateLimitStore = uploadRateLimitStoreOverride ??
     (redis ? new RedisStaffUploadRateLimitStore(redis) : undefined);
   app.register(async (adminApp) => {
@@ -189,7 +189,7 @@ export function buildServer(
     registerAdminCouponRoutes(adminApp, coupons, admins, config.allowedOrigins);
   }, { prefix: "/api/v1/admin/coupons" });
   const adminManagement = new AdminManagementService(database);
-  const adminOperations = new AdminOperationsService(database, config.adminMfaEncryptionKey ?? "");
+  const adminOperations = new AdminOperationsService(database);
   app.register(async (adminApp) => {
     registerAdminOfferRoutes(adminApp, productOffers, bundles, admins, config.allowedOrigins);
     registerAdminManagementRoutes(adminApp, adminManagement, admins, config.allowedOrigins);

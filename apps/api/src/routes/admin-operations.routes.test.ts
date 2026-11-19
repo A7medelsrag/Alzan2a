@@ -103,14 +103,26 @@ describe("admin operations permissions", () => {
     await server.close();
   });
 
-  it("returns 503 SERVICE_UNAVAILABLE when creating staff without an MFA encryption key", async () => {
+  it("creates staff with MFA disabled without requiring an MFA encryption key", async () => {
     const ownerId = "11111111-1111-4111-8111-111111111111";
+    const staffCreate = vi.fn().mockResolvedValue({
+      id: "22222222-2222-4222-8222-222222222222",
+      username: "new_manager",
+      role: "MANAGER",
+      isActive: true,
+    });
+    const auditCreate = vi.fn();
+    const txDb = {
+      adminAccount: { create: staffCreate },
+      auditLog: { create: auditCreate },
+    };
     const mockDb = {
       adminAccount: {
         findUnique: vi
           .fn()
           .mockResolvedValue({ id: ownerId, username: "owner", role: "OWNER", isActive: true }),
       },
+      $transaction: vi.fn().mockImplementation(async (cb) => cb(txDb)),
     } as unknown as PrismaClient;
     const sessions = {
       create: vi.fn(),
@@ -138,8 +150,16 @@ describe("admin operations permissions", () => {
         role: "MANAGER",
       },
     });
-    expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({ error: { code: "SERVICE_UNAVAILABLE" } });
+    expect(response.statusCode).toBe(201);
+    expect(staffCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          username: "new_manager",
+          role: "MANAGER",
+          mfaSecretEncrypted: "DISABLED",
+        }),
+      }),
+    );
     await server.close();
   });
 });

@@ -4,7 +4,6 @@ import type { AdminLoginInput } from "@store/shared";
 import { AppError } from "../errors.js";
 import { AdminRepository, type AdminIdentity } from "../repositories/admin.repository.js";
 import type { AdminSessionStore } from "./admin-session.store.js";
-import { decryptTotpSecret, hashRecoveryCode, verifyTotp } from "./admin-crypto.js";
 
 const passwordHashOptions: HashOptions = {
   type: argon2.argon2id,
@@ -19,7 +18,6 @@ export class AdminService {
   public constructor(
     private readonly admins: AdminRepository,
     private readonly sessions?: AdminSessionStore,
-    private readonly mfaEncryptionKey?: string,
   ) {}
 
   public async login(input: AdminLoginInput, previousToken?: string) {
@@ -33,25 +31,6 @@ export class AdminService {
     const passwordMatches = await argon2.verify(passwordHash, input.password);
     if (!admin || !admin.isActive || !passwordMatches) {
       throw new AppError("ADMIN_CREDENTIALS_INVALID", 401);
-    }
-
-    const hasMfa = Boolean(admin.mfaSecretEncrypted && admin.mfaSecretEncrypted !== "DISABLED" && admin.mfaSecretEncrypted !== "NONE");
-    if (hasMfa) {
-      if (!input.mfaCode) throw new AppError("ADMIN_MFA_REQUIRED", 401);
-
-      if (!this.mfaEncryptionKey) throw new AppError("SERVICE_UNAVAILABLE", 503);
-      const secret = decryptTotpSecret(admin.mfaSecretEncrypted, this.mfaEncryptionKey);
-      if (/^\d{6}$/.test(input.mfaCode)) {
-        const counter = verifyTotp(secret, input.mfaCode);
-        if (counter === null || (await this.admins.consumeTotpCounter(admin.id, counter)).count !== 1) {
-          throw new AppError("ADMIN_CREDENTIALS_INVALID", 401);
-        }
-      } else {
-        const recoveryHash = hashRecoveryCode(input.mfaCode);
-        if ((await this.admins.consumeRecoveryCode(admin.id, recoveryHash)).count !== 1) {
-          throw new AppError("ADMIN_CREDENTIALS_INVALID", 401);
-        }
-      }
     }
 
     await sessions.clearFailedLogins(accountKey);

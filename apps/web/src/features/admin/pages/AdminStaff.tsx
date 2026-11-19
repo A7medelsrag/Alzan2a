@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import {
   operationsApi,
-  showProvisioning,
-  type ProvisioningResult,
   type StaffRecord,
 } from "../api/operations";
 const c = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900";
@@ -23,12 +21,11 @@ export default function AdminStaff() {
   useEffect(() => {
     void load();
   }, []);
-  const run = async (fn: () => Promise<unknown>, provision = false) => {
+  const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
     try {
-      const result = await fn();
-      if (provision) showProvisioning(result as ProvisioningResult);
+      await fn();
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر تنفيذ العملية");
@@ -37,9 +34,13 @@ export default function AdminStaff() {
     }
   };
   const create = () =>
-    void run(() => operationsApi.createStaff({ username, password, role }), true);
+    void run(async () => {
+      await operationsApi.createStaff({ username, password, role });
+      setUsername("");
+      setPassword("");
+    });
   return (
-    <AdminLayout title="الموظفون والصلاحيات" subtitle="حسابات الموظفين وأدوارهم والتحقق بخطوتين">
+    <AdminLayout title="الموظفون والصلاحيات" subtitle="حسابات الموظفين وأدوارهم وصلاحيات الدخول">
       <div dir="rtl">
         {error && (
           <p role="alert" className="mb-4 rounded-lg bg-rose-50 p-3 text-rose-800">
@@ -74,18 +75,15 @@ export default function AdminStaff() {
               onClick={create}
               className="rounded-lg bg-[#5e0f2a] px-4 py-2 font-bold text-white"
             >
-              إنشاء الحساب وتهيئة MFA
+              إنشاء الحساب
             </button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            رابط تطبيق المصادقة ورموز الاسترداد ستظهر مرة واحدة بعد الإنشاء؛ احفظها بمكان آمن.
-          </p>
         </section>
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full min-w-[700px] text-right text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                {["اسم الدخول", "الدور", "الحالة", "آخر دخول", "إدارة"].map((x) => (
+                {["اسم الدخول", "الدور", "الحالة", "آخر دخول"].map((x) => (
                   <th key={x} className="p-3">
                     {x}
                   </th>
@@ -125,17 +123,6 @@ export default function AdminStaff() {
                     {s.lastLoginAt
                       ? new Date(s.lastLoginAt).toLocaleString("ar-EG")
                       : "لم يسجل الدخول"}
-                  </td>
-                  <td className="p-3">
-                    {s.role !== "OWNER" && (
-                      <button
-                        disabled={busy}
-                        onClick={() => void run(() => operationsApi.resetMfa(s.id), true)}
-                        className="rounded-lg border border-amber-300 px-3 py-2 text-amber-900"
-                      >
-                        إعادة ضبط MFA
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}

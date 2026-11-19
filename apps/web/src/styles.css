@@ -1373,7 +1373,7 @@
   direction: rtl;
 }
 
-.homepage-hero--single {
+.homepage-hero.homepage-hero--single {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -6074,6 +6074,10 @@ font-size: 0.85rem;
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     gap: 0.75rem;
     margin-block-start: 1rem;
+  }
+
+  .homepage-hero.homepage-hero--single {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .campaign-slider,
