@@ -1,21 +1,99 @@
 import { AdminApiError } from "./management";
 
-export type Supplier = { id: string; name: string };
+export type Supplier = {
+  id: string;
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  taxNumber?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type PurchasePaymentMethod = "CASH" | "BANK_TRANSFER" | "CHECK" | "OTHER";
+
+export type PurchasePayment = {
+  id: string;
+  invoiceId?: string;
+  amountCents: number;
+  method: PurchasePaymentMethod;
+  reference?: string | null;
+  notes?: string | null;
+  paidAt: string;
+  createdAt?: string;
+};
+
 export type PurchaseLine = {
   id: string;
+  invoiceId?: string;
+  variantId?: string;
   quantity: number;
-  variant: { name: string; product: { name: string } };
+  unitCostCents?: number;
+  allocatedExtraCostCents?: number;
+  lineTotalCents?: number;
+  variant: {
+    id?: string;
+    sku?: string;
+    name: string;
+    priceCents?: number;
+    costCents?: number | null;
+    stockQuantity?: number;
+    product: { name: string };
+  };
 };
+
 export type PurchaseInvoice = {
   id: string;
   invoiceNumber: string | null;
+  supplierId?: string;
   status: "DRAFT" | "CONFIRMED";
+  invoiceDate?: string;
+  subtotalCents?: number;
+  extraCostsCents?: number;
   totalCents: number;
   paidCents: number;
+  notes?: string | null;
+  confirmedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   supplier: Supplier;
   lines: PurchaseLine[];
+  payments?: PurchasePayment[];
 };
+
 export type PurchasesResponse = { data: { suppliers: Supplier[]; invoices: PurchaseInvoice[] } };
+
+export type CreateSupplierPayload = {
+  name: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+};
+
+export type CreatePurchasePayload = {
+  supplierId: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  extraCostsCents: number;
+  notes?: string;
+  lines: Array<{
+    variantId: string;
+    quantity: number;
+    unitCostCents: number;
+  }>;
+};
+
+export type RecordPurchasePaymentPayload = {
+  amountCents: number;
+  method: PurchasePaymentMethod;
+  paidAt?: string;
+  reference?: string;
+};
 export type ShippingRate = {
   governorate: string;
   priceCents: number;
@@ -108,14 +186,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const operationsApi = {
   purchases: () => request<PurchasesResponse>("/purchases"),
-  createSupplier: (body: unknown) =>
-    request("/purchases/suppliers", { method: "POST", body: JSON.stringify(body) }),
-  createPurchase: (body: unknown) =>
-    request("/purchases", { method: "POST", body: JSON.stringify(body) }),
+  createSupplier: (body: CreateSupplierPayload) =>
+    request<{ data: Supplier }>("/purchases/suppliers", { method: "POST", body: JSON.stringify(body) }),
+  createPurchase: (body: CreatePurchasePayload) =>
+    request<{ data: PurchaseInvoice }>("/purchases", { method: "POST", body: JSON.stringify(body) }),
   confirmPurchase: (id: string) =>
-    request(`/purchases/${id}/confirm`, { method: "POST", body: "{}" }),
-  payPurchase: (id: string, body: unknown) =>
-    request(`/purchases/${id}/payments`, { method: "POST", body: JSON.stringify(body) }),
+    request<{ data: PurchaseInvoice }>(`/purchases/${id}/confirm`, { method: "POST", body: "{}" }),
+  payPurchase: (id: string, body: RecordPurchasePaymentPayload) =>
+    request<{ data: PurchasePayment }>(`/purchases/${id}/payments`, { method: "POST", body: JSON.stringify(body) }),
   shipping: () => request<{ data: ShippingRate[] }>("/shipping"),
   updateShipping: (name: string, body: unknown) =>
     request(`/shipping/${encodeURIComponent(name)}`, {

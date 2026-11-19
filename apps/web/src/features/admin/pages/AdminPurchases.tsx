@@ -1,318 +1,519 @@
-import { useEffect, useState } from "react";
-import AdminLayout from "../components/AdminLayout";
-import { operationsApi } from "../api/operations";
-import type { PurchasesResponse } from "../api/operations";
-import { fetchAdminProducts } from "../api/management";
 import { formatEGP } from "@store/shared";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchAdminProducts } from "../api/management";
+import {
+  operationsApi,
+  type PurchaseInvoice,
+  type PurchasesResponse,
+  type Supplier,
+} from "../api/operations";
+import AdminLayout from "../components/AdminLayout";
+import ConfirmationDialog from "../components/purchases/ConfirmationDialog";
+import EmptyState from "../components/purchases/EmptyState";
+import InvoiceDetailsDrawer from "../components/purchases/InvoiceDetailsDrawer";
+import LoadingSkeleton from "../components/purchases/LoadingSkeleton";
+import PurchaseInvoiceForm from "../components/purchases/PurchaseInvoiceForm";
+import PurchaseInvoicesTable from "../components/purchases/PurchaseInvoicesTable";
+import PurchasePaymentModal from "../components/purchases/PurchasePaymentModal";
+import PurchasesPageHeader from "../components/purchases/PurchasesPageHeader";
+import PurchaseStatisticsCards from "../components/purchases/PurchaseStatisticsCards";
+import PurchasesToolbar from "../components/purchases/PurchasesToolbar";
+import SupplierModal from "../components/purchases/SupplierModal";
+import {
+  computePurchaseStats,
+  filterAndSortInvoices,
+  formatPurchaseApiError,
+  getInvoiceDisplayNumber,
+  type ProductVariantOption,
+  type PurchasePageSize,
+  type PurchaseSortOption,
+  type PurchaseStatusFilter,
+} from "../components/purchases/purchasesHelpers";
 
-const control = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900";
 export default function AdminPurchases() {
   const [data, setData] = useState<PurchasesResponse["data"]>({ suppliers: [], invoices: [] });
-  const [variants, setVariants] = useState<Array<{ id: string; label: string }>>([]);
-  const [error, setError] = useState("");
-  const [supplier, setSupplier] = useState("");
-  const [supplierName, setSupplierName] = useState("");
-  const [variantId, setVariantId] = useState("");
-  const [qty, setQty] = useState(1);
-  const [unit, setUnit] = useState(0);
-  const [additionalLines, setAdditionalLines] = useState<
-    Array<{ variantId: string; quantity: number; unitCostCents: number }>
-  >([]);
-  const [extra, setExtra] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const load = async () => {
+  const [variants, setVariants] = useState<ProductVariantOption[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  // Filters, Sorting & Pagination
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PurchaseStatusFilter>("ALL");
+  const [supplierFilter, setSupplierFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState<PurchaseSortOption>("date_desc");
+  const [pageSize, setPageSize] = useState<PurchasePageSize>(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Modals & Drawers
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [invoiceFormOpen, setInvoiceFormOpen] = useState(false);
+  const [newlyCreatedSupplierId, setNewlyCreatedSupplierId] = useState<string | undefined>(
+    undefined,
+  );
+  const [detailsInvoiceId, setDetailsInvoiceId] = useState<string | null>(null);
+  const [paymentTargetId, setPaymentTargetId] = useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<PurchaseInvoice | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setLoadError("");
+
     try {
-      const [p, products] = await Promise.all([operationsApi.purchases(), fetchAdminProducts()]);
-      setData(p.data);
+      const [purchasesRes, productsRes] = await Promise.all([
+        operationsApi.purchases(),
+        fetchAdminProducts(),
+      ]);
+      setData(purchasesRes.data);
       setVariants(
-        products.data.flatMap((x) =>
-          x.variants.map((v) => ({ id: v.id, label: `${x.name} — ${v.name}` }))
-        )
+        productsRes.data.flatMap((product) =>
+          product.variants.map((variant) => ({
+            id: variant.id,
+            productId: product.id,
+            productName: product.name,
+            variantName: variant.name,
+            sku: variant.sku,
+            stockQuantity: variant.stockQuantity,
+            priceCents: variant.priceCents,
+            label: `${product.name} — ${variant.name}`,
+          })),
+        ),
       );
-    } catch {
-      setError("تعذر تحميل بيانات المشتريات. تحقق من صلاحياتك واتصال الخادم.");
-    }
-  };
-  useEffect(() => {
-    void load();
-  }, []);
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await fn();
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تنفيذ العملية");
+    } catch (error) {
+      setLoadError(
+        formatPurchaseApiError(
+          error,
+          "تعذر تحميل بيانات المشتريات. تحقق من صلاحياتك واتصال الخادم.",
+        ),
+      );
     } finally {
-      setBusy(false);
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData(false);
+  }, [loadData]);
+
+  const stats = useMemo(
+    () => computePurchaseStats(data.invoices, data.suppliers),
+    [data.invoices, data.suppliers],
+  );
+
+  const hasActiveFilters = Boolean(
+    search.trim() ||
+      statusFilter !== "ALL" ||
+      supplierFilter !== "ALL" ||
+      dateFrom ||
+      dateTo,
+  );
+
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("ALL");
+    setSupplierFilter("ALL");
+    setDateFrom("");
+    setDateTo("");
+    setSortBy("date_desc");
+    setCurrentPage(1);
+  };
+
+  const filteredInvoices = useMemo(
+    () =>
+      filterAndSortInvoices(data.invoices, {
+        search,
+        status: statusFilter,
+        supplierId: supplierFilter,
+        dateFrom,
+        dateTo,
+        sortBy,
+      }),
+    [data.invoices, search, statusFilter, supplierFilter, dateFrom, dateTo, sortBy],
+  );
+
+  const totalPages =
+    pageSize === "ALL"
+      ? 1
+      : Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStartIndex = pageSize === "ALL" ? 0 : (safePage - 1) * pageSize;
+  const pageEndIndex =
+    pageSize === "ALL"
+      ? filteredInvoices.length
+      : Math.min(filteredInvoices.length, pageStartIndex + pageSize);
+  const paginatedInvoices =
+    pageSize === "ALL"
+      ? filteredInvoices
+      : filteredInvoices.slice(pageStartIndex, pageEndIndex);
+
+  const detailsInvoice = useMemo(
+    () =>
+      detailsInvoiceId
+        ? data.invoices.find((inv) => inv.id === detailsInvoiceId) ?? null
+        : null,
+    [data.invoices, detailsInvoiceId],
+  );
+
+  const paymentTargetInvoice = useMemo(
+    () =>
+      paymentTargetId
+        ? data.invoices.find((inv) => inv.id === paymentTargetId) ?? null
+        : null,
+    [data.invoices, paymentTargetId],
+  );
+
+  const handleSupplierCreated = (supplier: Supplier) => {
+    setData((prev) => ({
+      ...prev,
+      suppliers: [
+        ...prev.suppliers.filter((existing) => existing.id !== supplier.id),
+        supplier,
+      ].sort((a, b) => a.name.localeCompare(b.name, "ar")),
+    }));
+    if (invoiceFormOpen) {
+      setNewlyCreatedSupplierId(supplier.id);
+    }
+    setActionError("");
+    setNotice(`تمت إضافة المورد "${supplier.name}" بنجاح.`);
+    void loadData(true);
+  };
+
+  const handleInvoiceSaved = async ({
+    invoice,
+    approved,
+    confirmError,
+  }: {
+    invoice: PurchaseInvoice;
+    approved: boolean;
+    confirmError?: string;
+  }) => {
+    setActionError("");
+    setNotice("");
+    await loadData(true);
+
+    if (confirmError) {
+      setActionError(confirmError);
+      return;
+    }
+
+    if (approved) {
+      setNotice(
+        `تم إنشاء واعتماد الفاتورة ${getInvoiceDisplayNumber(invoice)} وإضافة الكميات للمخزون بنجاح.`,
+      );
+    } else {
+      setNotice(
+        `تم حفظ مسودة الفاتورة ${getInvoiceDisplayNumber(invoice)} بنجاح (لم يتغير المخزون).`,
+      );
     }
   };
-  const createSupplier = () =>
-    act(async () => {
-      if (!supplierName.trim()) return;
-      await operationsApi.createSupplier({ name: supplierName.trim() });
-      setSupplierName("");
-    });
-  const createPurchase = () =>
-    act(async () => {
-      if (
-        !supplier ||
-        !variantId ||
-        qty < 1 ||
-        unit < 0 ||
-        additionalLines.some(
-          (line) => !line.variantId || line.quantity < 1 || line.unitCostCents < 0
-        )
-      )
-        throw new Error("اختر المورد والصنف وأدخل الكمية والتكلفة");
-      await operationsApi.createPurchase({
-        supplierId: supplier,
-        extraCostsCents: extra,
-        lines: [
-          { variantId, quantity: qty, unitCostCents: Math.round(unit * 100) },
-          ...additionalLines,
-        ],
-      });
-      setAdditionalLines([]);
-    });
+
+  const handleConfirmPurchase = async () => {
+    if (!confirmTarget || confirming) return;
+
+    const target = confirmTarget;
+    setConfirming(true);
+    setActionError("");
+    setNotice("");
+
+    try {
+      await operationsApi.confirmPurchase(target.id);
+      setConfirmTarget(null);
+      await loadData(true);
+      setNotice(
+        `تم اعتماد الفاتورة ${getInvoiceDisplayNumber(target)} وإضافة الكميات للمخزون وتحديث متوسط التكلفة.`,
+      );
+    } catch (error) {
+      setConfirmTarget(null);
+      setActionError(formatPurchaseApiError(error, "تعذر اعتماد الفاتورة."));
+      await loadData(true);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handlePaymentRecorded = async () => {
+    setActionError("");
+    await loadData(true);
+    setNotice("تم تسجيل الدفعة وتحديث الرصيد المتبقي بنجاح.");
+  };
+
   return (
-    <AdminLayout title="المشتريات" subtitle="الموردون وفواتير الشراء والمبالغ المستحقة">
-      {error && (
-        <p role="alert" className="mb-4 rounded-lg bg-rose-50 p-3 text-rose-800">
-          {error}
-        </p>
-      )}
-      <section
-        className="mb-5 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 lg:grid-cols-2"
-        dir="rtl"
-      >
-        <div>
-          <h2 className="mb-3 font-bold text-slate-900">إضافة مورد</h2>
-          <div className="flex gap-2">
-            <input
-              className={`${control} min-w-0 flex-1`}
-              placeholder="اسم المورد"
-              value={supplierName}
-              onChange={(e) => setSupplierName(e.target.value)}
-            />
-            <button
-              disabled={busy}
-              onClick={() => void createSupplier()}
-              className="rounded-lg bg-[#5e0f2a] px-4 font-bold text-white"
-            >
-              إضافة
-            </button>
-          </div>
-        </div>
-        <div>
-          <h2 className="mb-3 font-bold text-slate-900">مسودة فاتورة جديدة</h2>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <select
-              className={control}
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-            >
-              <option value="">اختر المورد</option>
-              {data.suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className={control}
-              value={variantId}
-              onChange={(e) => setVariantId(e.target.value)}
-            >
-              <option value="">اختر المنتج / المقاس</option>
-              {variants.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-            <input
-              className={control}
-              type="number"
-              min="1"
-              value={qty}
-              aria-label="الكمية"
-              onChange={(e) => setQty(Number(e.target.value))}
-            />
-            <input
-              className={control}
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="تكلفة الوحدة بالجنيه"
-              value={unit}
-              onChange={(e) => setUnit(Number(e.target.value))}
-            />
-            {additionalLines.map((line, index) => (
-              <div key={index} className="col-span-full grid gap-2 sm:grid-cols-4">
-                <select
-                  className={control}
-                  value={line.variantId}
-                  aria-label="صنف إضافي"
-                  onChange={(e) =>
-                    setAdditionalLines((rows) =>
-                      rows.map((row, i) =>
-                        i === index ? { ...row, variantId: e.target.value } : row
-                      )
-                    )
-                  }
-                >
-                  <option value="">اختر المنتج / المقاس</option>
-                  {variants.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className={control}
-                  type="number"
-                  min="1"
-                  value={line.quantity}
-                  aria-label="كمية الصنف الإضافي"
-                  onChange={(e) =>
-                    setAdditionalLines((rows) =>
-                      rows.map((row, i) =>
-                        i === index ? { ...row, quantity: Number(e.target.value) } : row
-                      )
-                    )
-                  }
-                />
-                <input
-                  className={control}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={line.unitCostCents / 100}
-                  aria-label="تكلفة وحدة الصنف الإضافي"
-                  onChange={(e) =>
-                    setAdditionalLines((rows) =>
-                      rows.map((row, i) =>
-                        i === index
-                          ? { ...row, unitCostCents: Math.round(Number(e.target.value) * 100) }
-                          : row
-                      )
-                    )
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => setAdditionalLines((rows) => rows.filter((_, i) => i !== index))}
-                  className="rounded-lg border border-rose-200 px-3 py-2 text-rose-700"
-                >
-                  حذف الصنف
-                </button>
-              </div>
-            ))}
+    <AdminLayout
+      title="المشتريات"
+      subtitle="إدارة الموردين وفواتير الشراء والمبالغ المستحقة"
+    >
+      <div className="space-y-5 min-w-0">
+        {/* Page Header */}
+        <PurchasesPageHeader
+          disabled={loading && data.invoices.length === 0 && data.suppliers.length === 0}
+          onCreateInvoice={() => {
+            setNewlyCreatedSupplierId(undefined);
+            setInvoiceFormOpen(true);
+          }}
+          onCreateSupplier={() => setSupplierModalOpen(true)}
+        />
+
+        {/* Purchase Statistics Cards */}
+        <PurchaseStatisticsCards
+          stats={stats}
+          loading={loading && data.invoices.length === 0 && data.suppliers.length === 0}
+        />
+
+        {/* Feedback Banners */}
+        {notice && (
+          <div
+            role="status"
+            className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <svg
+                className="w-4 h-4 text-emerald-600 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.2}
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{notice}</span>
+            </div>
             <button
               type="button"
-              onClick={() =>
-                setAdditionalLines((rows) => [
-                  ...rows,
-                  { variantId: "", quantity: 1, unitCostCents: 0 },
-                ])
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800"
+              onClick={() => setNotice("")}
+              aria-label="إغلاق إشعار النجاح"
+              className="text-emerald-700 hover:text-emerald-900 font-bold px-1 shrink-0"
             >
-              إضافة صنف آخر
-            </button>
-            <input
-              className={control}
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="مصاريف إضافية بالجنيه"
-              value={extra / 100}
-              onChange={(e) => setExtra(Math.round(Number(e.target.value) * 100))}
-            />
-            <button
-              disabled={busy}
-              onClick={() => void createPurchase()}
-              className="rounded-lg bg-[#5e0f2a] px-4 py-2 font-bold text-white"
-            >
-              حفظ كمسودة
+              ✕
             </button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            المسودة لا تغيّر المخزون؛ الاعتماد يضيف الكمية ويحدّث متوسط التكلفة.
-          </p>
-        </div>
-      </section>
-      <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[750px] text-right text-sm" dir="rtl">
-          <thead className="bg-slate-50 text-slate-600">
-            <tr>
-              {[
-                "الفاتورة",
-                "المورد",
-                "الأصناف",
-                "الإجمالي",
-                "المدفوع",
-                "المتبقي",
-                "الحالة",
-                "إجراء",
-              ].map((s) => (
-                <th className="p-3" key={s}>
-                  {s}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.invoices.map((i) => (
-              <tr key={i.id}>
-                <td className="p-3 text-slate-800">{i.invoiceNumber || i.id.slice(0, 8)}</td>
-                <td className="p-3 text-slate-800">{i.supplier.name}</td>
-                <td className="p-3 text-slate-700">
-                  {i.lines.map((l) => `${l.variant.product.name} × ${l.quantity}`).join("، ")}
-                </td>
-                <td className="p-3 text-slate-800">{formatEGP(i.totalCents)}</td>
-                <td className="p-3 text-emerald-700">{formatEGP(i.paidCents)}</td>
-                <td className="p-3 text-rose-700">{formatEGP(i.totalCents - i.paidCents)}</td>
-                <td className="p-3 text-slate-700">{i.status === "DRAFT" ? "مسودة" : "معتمدة"}</td>
-                <td className="flex gap-2 p-3">
-                  {i.status === "DRAFT" && (
-                    <button
-                      disabled={busy}
-                      onClick={() => void act(() => operationsApi.confirmPurchase(i.id))}
-                      className="rounded bg-emerald-700 px-3 py-2 text-white"
-                    >
-                      اعتماد وإضافة للمخزون
-                    </button>
-                  )}
-                  {i.status === "CONFIRMED" && i.paidCents < i.totalCents && (
-                    <button
-                      disabled={busy}
-                      onClick={() => {
-                        const amount = window.prompt("المبلغ المدفوع بالجنيه");
-                        if (amount)
-                          void act(() =>
-                            operationsApi.payPurchase(i.id, {
-                              amountCents: Math.round(Number(amount) * 100),
-                              method: "CASH",
-                            })
-                          );
-                      }}
-                      className="rounded bg-blue-700 px-3 py-2 text-white"
-                    >
-                      تسجيل دفعة
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!data.invoices.length && (
-          <p className="p-8 text-center text-slate-500">لا توجد فواتير شراء حتى الآن.</p>
         )}
-      </section>
+
+        {actionError && (
+          <div
+            role="alert"
+            className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <svg
+                className="w-4 h-4 text-[#C8102E] shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.2}
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>{actionError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActionError("")}
+              aria-label="إغلاق رسالة الخطأ"
+              className="text-rose-700 hover:text-rose-900 font-bold px-1 shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Main Content: Loading / Load Error / Invoices List */}
+        {loading && data.invoices.length === 0 && data.suppliers.length === 0 ? (
+          <LoadingSkeleton />
+        ) : loadError && data.invoices.length === 0 && data.suppliers.length === 0 ? (
+          <div
+            role="alert"
+            className="bg-white rounded-2xl border border-rose-200 p-10 text-center space-y-4 shadow-2xs"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-[#C8102E] flex items-center justify-center mx-auto font-black text-lg">
+              !
+            </div>
+            <div className="space-y-1 max-w-md mx-auto">
+              <h3 className="text-base font-bold text-[#101B30]">تعذر تحميل بيانات المشتريات</h3>
+              <p className="text-xs text-neutral-500 leading-relaxed">{loadError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadData(false)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#101B30] hover:bg-[#1a2b4c] text-xs font-bold text-white shadow-2xs transition-colors"
+            >
+              إعادة المحاولة
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4 min-w-0">
+            {loadError && (
+              <div
+                role="alert"
+                className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between gap-2"
+              >
+                <span>{loadError}</span>
+                <button
+                  type="button"
+                  onClick={() => void loadData(true)}
+                  className="px-3 py-1 rounded-lg bg-white border border-amber-300 font-bold text-amber-900 shrink-0"
+                >
+                  إعادة المحاولة
+                </button>
+              </div>
+            )}
+
+            <PurchasesToolbar
+              search={search}
+              onSearchChange={(val) => {
+                setSearch(val);
+                setCurrentPage(1);
+              }}
+              statusFilter={statusFilter}
+              onStatusFilterChange={(val) => {
+                setStatusFilter(val);
+                setCurrentPage(1);
+              }}
+              supplierFilter={supplierFilter}
+              onSupplierFilterChange={(val) => {
+                setSupplierFilter(val);
+                setCurrentPage(1);
+              }}
+              dateFrom={dateFrom}
+              onDateFromChange={(val) => {
+                setDateFrom(val);
+                setCurrentPage(1);
+              }}
+              dateTo={dateTo}
+              onDateToChange={(val) => {
+                setDateTo(val);
+                setCurrentPage(1);
+              }}
+              sortBy={sortBy}
+              onSortChange={(val) => {
+                setSortBy(val);
+                setCurrentPage(1);
+              }}
+              pageSize={pageSize}
+              onPageSizeChange={(val) => {
+                setPageSize(val);
+                setCurrentPage(1);
+              }}
+              suppliers={data.suppliers}
+              onRefresh={() => void loadData(true)}
+              onResetFilters={resetFilters}
+              hasActiveFilters={hasActiveFilters}
+              refreshing={refreshing || loading}
+              filteredCount={filteredInvoices.length}
+              totalCount={data.invoices.length}
+            />
+
+            {data.invoices.length === 0 ? (
+              <EmptyState
+                variant="empty"
+                title="لا توجد فواتير شراء حتى الآن."
+                description="قم بإضافة فاتورة شراء جديدة للبدء."
+                actionLabel="إضافة فاتورة شراء جديدة"
+                onAction={() => {
+                  setNewlyCreatedSupplierId(undefined);
+                  setInvoiceFormOpen(true);
+                }}
+              />
+            ) : filteredInvoices.length === 0 ? (
+              <EmptyState
+                variant="filtered"
+                title="لا توجد فواتير مطابقة للبحث"
+                description="جرّب تغيير كلمة البحث أو حالة الفاتورة أو نطاق التاريخ."
+                actionLabel="عرض جميع الفواتير"
+                onAction={resetFilters}
+              />
+            ) : (
+              <PurchaseInvoicesTable
+                invoices={paginatedInvoices}
+                totalFilteredCount={filteredInvoices.length}
+                currentPage={safePage}
+                totalPages={totalPages}
+                pageStartIndex={pageStartIndex}
+                pageEndIndex={pageEndIndex}
+                busy={confirming}
+                onPageChange={setCurrentPage}
+                onViewDetails={(invoice) => setDetailsInvoiceId(invoice.id)}
+                onRequestConfirm={(invoice) => setConfirmTarget(invoice)}
+                onOpenPayment={(invoice) => setPaymentTargetId(invoice.id)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Create Purchase Invoice Modal */}
+      <PurchaseInvoiceForm
+        open={invoiceFormOpen}
+        suppliers={data.suppliers}
+        variants={variants}
+        selectedSupplierIdOverride={newlyCreatedSupplierId}
+        isChildModalOpen={supplierModalOpen}
+        onClose={() => setInvoiceFormOpen(false)}
+        onOpenAddSupplier={() => setSupplierModalOpen(true)}
+        onSaved={handleInvoiceSaved}
+      />
+
+      {/* Add Supplier Modal (usable independently or stacked above Invoice Form) */}
+      <SupplierModal
+        open={supplierModalOpen}
+        onClose={() => setSupplierModalOpen(false)}
+        onCreated={handleSupplierCreated}
+      />
+
+      {/* Invoice Details Drawer */}
+      <InvoiceDetailsDrawer
+        invoice={detailsInvoice}
+        busy={confirming}
+        onClose={() => {
+          if (!paymentTargetId && !confirmTarget && !confirming) {
+            setDetailsInvoiceId(null);
+          }
+        }}
+        onRequestConfirm={(invoice) => setConfirmTarget(invoice)}
+        onOpenPayment={(invoice) => setPaymentTargetId(invoice.id)}
+      />
+
+      {/* Record Payment Modal */}
+      <PurchasePaymentModal
+        invoice={paymentTargetInvoice}
+        onClose={() => setPaymentTargetId(null)}
+        onRecorded={handlePaymentRecorded}
+      />
+
+      {/* Confirm/Approve Draft Invoice Dialog */}
+      <ConfirmationDialog
+        open={Boolean(confirmTarget)}
+        variant="approve"
+        title={`اعتماد فاتورة الشراء ${confirmTarget ? getInvoiceDisplayNumber(confirmTarget) : ""}`}
+        message={
+          confirmTarget
+            ? `هل تريد اعتماد فاتورة المورد "${confirmTarget.supplier.name}" بقيمة ${formatEGP(confirmTarget.totalCents)}؟ سيتم إضافة الكميات إلى المخزون وتحديث متوسط التكلفة، ولا يمكن التراجع عن هذا الإجراء.`
+            : ""
+        }
+        confirmLabel="اعتماد وإضافة للمخزون"
+        loadingLabel="جارٍ الاعتماد..."
+        loading={confirming}
+        onCancel={() => {
+          if (!confirming) setConfirmTarget(null);
+        }}
+        onConfirm={() => void handleConfirmPurchase()}
+      />
     </AdminLayout>
   );
 }
