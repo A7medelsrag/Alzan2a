@@ -217,11 +217,11 @@ export default function AdminLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 bg-[#F8F9FA]/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-neutral-200/70">
-          <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-30 bg-[#F8F9FA]/90 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between gap-3 border-b border-neutral-200/70">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-lg border border-neutral-300 bg-white text-neutral-700 shadow-xs"
+              className="lg:hidden p-2 rounded-lg border border-neutral-300 bg-white text-neutral-700 shadow-xs shrink-0"
               type="button"
               aria-label="القائمة"
             >
@@ -230,18 +230,18 @@ export default function AdminLayout({
               </svg>
             </button>
 
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-neutral-900 leading-tight">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-neutral-900 leading-tight truncate">
                 {title || "الرئيسية"}
               </h1>
-              <p className="text-xs text-neutral-500 font-medium mt-0.5">
+              <p className="text-xs text-neutral-500 font-medium mt-0.5 truncate">
                 {subtitle || new Intl.DateTimeFormat("ar-EG", { dateStyle: "full" }).format(new Date())}
               </p>
             </div>
           </div>
 
           {/* Center / Left Controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             {headerActions}
 
             {/* Quick Time Filter Pills */}
@@ -297,7 +297,7 @@ export default function AdminLayout({
         </header>
 
         {/* Page Body */}
-        <main className="p-4 md:p-6 lg:p-8 flex-1 max-w-7xl w-full mx-auto space-y-6">
+        <main className="p-4 md:p-6 lg:p-8 flex-1 min-w-0 max-w-7xl w-full mx-auto space-y-6">
           {children}
         </main>
       </div>
